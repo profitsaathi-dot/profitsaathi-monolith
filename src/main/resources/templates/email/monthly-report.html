@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:Segoe UI, Arial, sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:32px 0;">
+  <tr>
+    <td align="center">
+      <table width="560" cellpadding="0" cellspacing="0"
+             style="background:#ffffff;border-radius:14px;padding:32px 36px;
+                    box-shadow:0 12px 28px rgba(0,0,0,0.08);">
+
+        <!-- Brand stripe -->
+        <tr>
+          <td style="padding-bottom:8px;font-size:12px;letter-spacing:1px;
+                     text-transform:uppercase;color:#10b981;font-weight:600;">
+            ProfitSaathi · Monthly report
+          </td>
+        </tr>
+
+        <!-- Heading -->
+        <tr>
+          <td style="padding-bottom:18px;">
+            <h1 style="margin:0;font-size:24px;color:#111827;font-weight:700;">
+              <span th:text="${monthLabel}">January 2026</span> in review
+            </h1>
+            <div style="font-size:14px;color:#6b7280;margin-top:4px;">
+              Hi <strong th:text="${sellerName}">Seller</strong>, here's how your business performed last month.
+            </div>
+          </td>
+        </tr>
+
+        <!-- KPI grid -->
+        <tr>
+          <td>
+            <table width="100%" cellpadding="0" cellspacing="0">
+              <tr>
+                <td width="50%" style="padding:8px 6px 8px 0;">
+                  <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;">
+                    <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.6px;">Revenue</div>
+                    <div style="font-size:20px;color:#111827;font-weight:700;margin-top:4px;"
+                         th:text="${revenue}">₹0</div>
+                  </div>
+                </td>
+                <td width="50%" style="padding:8px 0 8px 6px;">
+                  <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;">
+                    <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.6px;">Net profit</div>
+                    <div style="font-size:20px;color:#10b981;font-weight:700;margin-top:4px;"
+                         th:text="${netProfit}">₹0</div>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td width="50%" style="padding:6px 6px 8px 0;">
+                  <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;">
+                    <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.6px;">Cost of goods</div>
+                    <div style="font-size:20px;color:#111827;font-weight:700;margin-top:4px;"
+                         th:text="${cogs}">₹0</div>
+                  </div>
+                </td>
+                <td width="50%" style="padding:6px 0 8px 6px;">
+                  <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:14px 16px;">
+                    <div style="font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.6px;">Margin</div>
+                    <div style="font-size:20px;color:#111827;font-weight:700;margin-top:4px;"
+                         th:text="${margin}">0%</div>
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Health score band -->
+        <tr>
+          <td style="padding-top:14px;">
+            <div style="background:linear-gradient(90deg,#ecfdf5,#ffffff);
+                        border:1px solid #d1fae5;border-radius:10px;padding:14px 16px;">
+              <div style="font-size:12px;color:#065f46;text-transform:uppercase;letter-spacing:0.6px;">Health score</div>
+              <div style="font-size:26px;color:#065f46;font-weight:800;margin-top:2px;">
+                <span th:text="${healthScore}">0</span>
+                <span style="font-size:14px;color:#6b7280;font-weight:500;">/100</span>
+                <span style="font-size:14px;color:#065f46;font-weight:600;margin-left:8px;"
+                      th:text="'· ' + ${healthBand}">· Healthy</span>
+              </div>
+            </div>
+          </td>
+        </tr>
+
+        <!-- Top products -->
+        <tr th:if="${!topProducts.isEmpty()}">
+          <td style="padding-top:24px;padding-bottom:8px;font-size:13px;color:#111827;font-weight:700;">
+            Top products by profit
+          </td>
+        </tr>
+        <tr th:each="p, it : ${topProducts}" th:if="${!topProducts.isEmpty()}">
+          <td style="padding:6px 0;">
+            <table width="100%" cellpadding="0" cellspacing="0"
+                   style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 14px;">
+              <tr>
+                <td style="font-size:14px;color:#111827;">
+                  <span style="display:inline-block;width:22px;height:22px;line-height:22px;
+                               text-align:center;border-radius:50%;background:#ecfdf5;
+                               color:#10b981;font-weight:700;font-size:12px;margin-right:8px;"
+                        th:text="${it.index + 1}">1</span>
+                  <strong th:text="${p.name}">Product</strong>
+                  <span style="color:#6b7280;font-size:12px;margin-left:6px;"
+                        th:text="'· ' + ${p.units} + ' units'">· 0 units</span>
+                </td>
+                <td align="right" style="font-size:14px;color:#10b981;font-weight:700;"
+                    th:text="${p.profit}">₹0</td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Growth tips -->
+        <tr th:if="${!tips.isEmpty()}">
+          <td style="padding-top:22px;padding-bottom:8px;font-size:13px;color:#111827;font-weight:700;">
+            Suggested actions
+          </td>
+        </tr>
+        <tr th:each="tip : ${tips}" th:if="${!tips.isEmpty()}">
+          <td style="padding:4px 0;">
+            <div style="background:#fffbeb;border-left:3px solid #f59e0b;
+                        border-radius:6px;padding:10px 14px;font-size:13px;color:#374151;line-height:1.5;"
+                 th:text="${tip}">tip</div>
+          </td>
+        </tr>
+
+        <!-- CTA -->
+        <tr>
+          <td align="center" style="padding:28px 0 12px 0;">
+            <a th:href="${dashboardUrl}"
+               style="display:inline-block;background:#10b981;color:#ffffff;text-decoration:none;
+                      font-size:14px;font-weight:600;padding:12px 28px;border-radius:8px;">
+              Open full report
+            </a>
+          </td>
+        </tr>
+
+        <!-- Footer -->
+        <tr>
+          <td style="padding-top:18px;border-top:1px solid #e5e7eb;font-size:12px;color:#9ca3af;
+                     text-align:center;line-height:1.6;">
+            Don't want these monthly reports?
+            Update preferences in your <a th:href="${dashboardUrl}" style="color:#6b7280;">dashboard settings</a>.
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

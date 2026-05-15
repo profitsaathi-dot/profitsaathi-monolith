@@ -1,0 +1,78 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: profitsaathi
+      POSTGRES_USER: ${DB_USERNAME:-myuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-mypass}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-myuser} -d profitsaathi"]
+      interval: 10s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  waha:
+    image: devlikeapro/waha:latest
+    restart: unless-stopped
+    ports:
+      - "3004:3000"
+    environment:
+      WHATSAPP_API_KEY: ${WAHA_API_KEY:-e48f5e804f894463883d05c5f85721fe}
+    volumes:
+      - waha_sessions:/app/.sessions
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      waha:
+        condition: service_started
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      DB_URL: jdbc:postgresql://postgres:5432/profitsaathi
+      DB_USERNAME: ${DB_USERNAME:-myuser}
+      DB_PASSWORD: ${DB_PASSWORD:-mypass}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080}
+      JWT_SECRET: ${JWT_SECRET}
+      AES_SECRET_KEY: ${AES_SECRET_KEY}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT:-587}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_FROM: ${MAIL_FROM}
+      WAHA_URL: http://waha:3000
+      WAHA_API_KEY: ${WAHA_API_KEY:-e48f5e804f894463883d05c5f85721fe}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+      GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+      LOG_FORMAT: json
+    ports:
+      - "9090:9097"
+    volumes:
+      - app_uploads:/app/uploads
+
+volumes:
+  pg_data:
+  redis_data:
+  waha_sessions:
+  app_uploads:

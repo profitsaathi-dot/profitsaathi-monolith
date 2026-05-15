@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!--
+      Two appenders. JSON_STDOUT is the default in containerized envs (Docker
+      will capture, Better Stack / Grafana Cloud free tier can ingest with no
+      agent). PLAIN_STDOUT is friendlier locally.
+
+      Selection is driven by the active Spring profile:
+        - "local"      → plain
+        - everything else (uat, prod, …) → JSON
+
+      Override either way by setting -Dlogging.config to a different file.
+    -->
+
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="profitsaathi"/>
+
+    <appender name="PLAIN_STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{ISO8601} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="JSON_STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <timestamp/>
+                <version/>
+                <logLevel/>
+                <loggerName/>
+                <threadName/>
+                <message/>
+                <stackTrace/>
+                <mdc/>
+                <pattern>
+                    <pattern>{"app":"${appName}"}</pattern>
+                </pattern>
+            </providers>
+        </encoder>
+    </appender>
+
+    <springProfile name="local">
+        <root level="INFO">
+            <appender-ref ref="PLAIN_STDOUT"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="!local">
+        <root level="INFO">
+            <appender-ref ref="JSON_STDOUT"/>
+        </root>
+    </springProfile>
+
+    <logger name="com.profitsaathi" level="DEBUG"/>
+    <logger name="org.hibernate.SQL" level="WARN"/>
+    <logger name="org.springframework.security" level="INFO"/>
+</configuration>

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<body style="margin:0;padding:0;background-color:#f3f4f6;font-family:Segoe UI, Arial, sans-serif;">
+
+<table width="100%" cellpadding="0" cellspacing="0" style="padding:40px 0;">
+    <tr>
+        <td align="center">
+            <table width="500" cellpadding="0" cellspacing="0"
+                   style="background:#ffffff;border-radius:12px;padding:40px;
+                          box-shadow:0 10px 25px rgba(0,0,0,0.08);">
+
+                <!-- Header -->
+                <tr>
+                    <td align="center" style="padding-bottom:25px;">
+                        <h1 style="margin:0;font-size:22px;color:#111827;font-weight:600;">
+                            Welcome to Our Platform 🎉
+                        </h1>
+                        <div style="width:60px;height:4px;background:#2563eb;margin:12px auto 0;border-radius:4px;"></div>
+                    </td>
+                </tr>
+
+                <!-- Greeting -->
+                <tr>
+                    <td style="font-size:16px;color:#374151;padding-bottom:15px;">
+                        Hi <strong><span th:text="${name}">User</span></strong>,
+                    </td>
+                </tr>
+
+                <!-- Message -->
+                <tr>
+                    <td style="font-size:15px;color:#4b5563;padding-bottom:20px;line-height:1.6;">
+                        We're excited to have you onboard! Your account has been successfully created.
+                        You can now access your dashboard and start exploring all the features available to you.
+                    </td>
+                </tr>
+
+                <!-- CTA Button -->
+                <tr>
+                    <td align="center" style="padding:20px 0;">
+                        <a th:href="${dashboardUrl}"
+                           style="
+                            display:inline-block;
+                            background:#2563eb;
+                            color:#ffffff;
+                            text-decoration:none;
+                            font-size:15px;
+                            font-weight:600;
+                            padding:12px 28px;
+                            border-radius:8px;">
+                            Go to Dashboard
+                        </a>
+                    </td>
+                </tr>
+
+                <!-- Info Section -->
+                <tr>
+                    <td style="font-size:14px;color:#6b7280;padding-top:10px;line-height:1.6;">
+                        <strong>Account Email:</strong>
+                        <span th:text="${email}">user@example.com</span>
+                        <br><br>
+                        If you have any questions, feel free to reach out to our support team.
+                    </td>
+                </tr>
+
+                <!-- Divider -->
+                <tr>
+                    <td style="padding:25px 0;">
+                        <hr style="border:none;border-top:1px solid #e5e7eb;">
+                    </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                    <td style="font-size:14px;color:#9ca3af;text-align:center;line-height:1.6;">
+                        Thank you for choosing us.<br><br>
+                        Regards,<br>
+                        <strong>Your Company Team</strong>
+                    </td>
+                </tr>
+
+            </table>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
