@@ -23,16 +23,6 @@ services:
     volumes:
       - redis_data:/data
 
-  waha:
-    image: devlikeapro/waha:latest
-    restart: unless-stopped
-    ports:
-      - "3004:3000"
-    environment:
-      WHATSAPP_API_KEY: ${WAHA_API_KEY:-e48f5e804f894463883d05c5f85721fe}
-    volumes:
-      - waha_sessions:/app/.sessions
-
   app:
     build: .
     restart: unless-stopped
@@ -58,8 +48,6 @@ services:
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_FROM: ${MAIL_FROM}
-      WAHA_URL: http://waha:3000
-      WAHA_API_KEY: ${WAHA_API_KEY:-e48f5e804f894463883d05c5f85721fe}
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
       GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-}
