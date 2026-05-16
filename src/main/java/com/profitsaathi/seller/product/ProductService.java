@@ -123,13 +123,24 @@ public class ProductService {
                 Files.createDirectories(path.getParent());
                 Files.write(path, file.getBytes());
 
-                if (existingPaths.size() > i) existingPaths.set(i, filename);
+                //if (existingPaths.size() > i) existingPaths.set(i, filename);
+                if (existingPaths.size() > i) {
+                    deleteOldFile(existingPaths.get(i));
+                    existingPaths.set(i, filename);
+                }
                 else existingPaths.add(filename);
             }
         }
         return existingPaths;
     }
 
+    private void deleteOldFile(String fileName) {
+        try {
+            Path path = Paths.get(productConfig.getUploadDir(), fileName);
+            Files.deleteIfExists(path);
+        } catch (Exception ignored) {
+        }
+    }
     private static String buildSafeFilename(MultipartFile file, int index) {
         String original = file.getOriginalFilename() != null ? file.getOriginalFilename() : "file";
         String ext = "";
