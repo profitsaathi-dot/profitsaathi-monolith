@@ -31,7 +31,7 @@ public class ProductService {
     private final AESService aesService;
     private final ObjectMapper objectMapper;
     private final ProductConfig productConfig;
-   // private final CacheManager cacheManager;
+    private final CacheManager cacheManager;
 
     @Transactional
     public void addProduct(Long sellerId, String encryptedJson, List<MultipartFile> media, int mainImageIndex) throws Exception {
@@ -65,7 +65,7 @@ public class ProductService {
         entity.setMainImageIndex((mainImageIndex >= 0 && mainImageIndex < mediaPaths.size()) ? mainImageIndex : 0);
 
         productRepository.save(entity);
-        //evictSellerCache(seller.getId());
+        evictSellerCache(seller.getId());
     }
 
     @Transactional
@@ -236,8 +236,8 @@ public class ProductService {
     }
 
     private void evictSellerCache(Long sellerId) {
-       // org.springframework.cache.Cache cache = cacheManager.getCache("sellerProducts");
-        //if (cache != null) cache.evict(sellerId);
+        org.springframework.cache.Cache cache = cacheManager.getCache("sellerProducts");
+        if (cache != null) cache.evict(sellerId);
     }
 
     private Map<String, Object> mapToSimpleMap(Product p) {
