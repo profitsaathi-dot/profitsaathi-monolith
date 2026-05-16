@@ -33,7 +33,7 @@ public class ProductService {
     private final ObjectMapper objectMapper;
     private final ProductConfig productConfig;
 
-    @CacheEvict(value = "sellerProducts", key = "#sellerId")
+    //@CacheEvict(value = "sellerProducts", key = "#sellerId")
     @Transactional
     public void addProduct(Long sellerId, String encryptedJson, List<MultipartFile> media, int mainImageIndex) throws Exception {
         Seller seller = sellerRepository.findById(sellerId)
@@ -68,7 +68,7 @@ public class ProductService {
         productRepository.save(entity);
         //evictSellerCache(seller.getId());
     }
-    @CacheEvict(value = "sellerProducts", key = "#sellerId")
+    //@CacheEvict(value = "sellerProducts", key = "#sellerId")
     @Transactional
     public void updateProduct(String encryptedJson, List<MultipartFile> media, int mainImageIndex) throws Exception {
         String decryptedJson = aesService.decryptToJson(encryptedJson);
