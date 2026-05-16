@@ -13,7 +13,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
 
       # Redis Cloud
-      REDIS_URL: ${REDIS_URL}
+      REDIS_URL: ${SPRING_REDIS_URL}
 
       # CORS
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
