@@ -1,57 +1,61 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: profitsaathi
-      POSTGRES_USER: ${DB_USERNAME:-myuser}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-mypass}
-    volumes:
-      - pg_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-myuser} -d profitsaathi"]
-      interval: 10s
-      retries: 5
-
   app:
     build: .
+    container_name: profitsaathi-app
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      waha:
-        condition: service_started
+
     environment:
-      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
-      DB_URL: jdbc:postgresql://postgres:5432/profitsaathi
-      DB_USERNAME: ${DB_USERNAME:-myuser}
-      DB_PASSWORD: ${DB_PASSWORD:-mypass}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:3000,http://localhost:8080}
+      SPRING_PROFILES_ACTIVE: uat
+
+      # PostgreSQL Cloud
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+
+      # Redis Cloud
+      REDIS_URL: ${REDIS_URL}
+
+      # CORS
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+
+      # Security
       JWT_SECRET: ${JWT_SECRET}
       AES_SECRET_KEY: ${AES_SECRET_KEY}
+
+      # Mail
       MAIL_HOST: ${MAIL_HOST}
       MAIL_PORT: ${MAIL_PORT:-587}
       MAIL_USERNAME: ${MAIL_USERNAME}
       MAIL_PASSWORD: ${MAIL_PASSWORD}
       MAIL_FROM: ${MAIL_FROM}
+
+      # Razorpay
       RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID}
       RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET}
+
+      # AI
       GOOGLE_AI_API_KEY: ${GOOGLE_AI_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      PUBLIC_API_URL: ${PUBLIC_API_URL:-http://localhost:8080}
+
+      # API URL
+      PUBLIC_API_URL: ${PUBLIC_API_URL}
+
       LOG_FORMAT: json
+
     ports:
       - "9090:9097"
+
     volumes:
       - app_uploads:/app/uploads
 
+  waha:
+    image: devlikeapro/waha
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    volumes:
+      - waha_sessions:/app/.sessions
+
 volumes:
-  pg_data:
-  waha_sessions:
   app_uploads:
+  waha_sessions:
