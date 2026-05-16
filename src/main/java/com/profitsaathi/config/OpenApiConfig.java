@@ -41,6 +41,9 @@ public class OpenApiConfig {
                 .url("/")
                 .description("Direct Spring Boot — bypass nginx (port 9097)");
 
+        Server server = new Server()
+                .url("");
+
         return new OpenAPI()
                 .info(new Info()
                         .title("ProfitSaathi Monolith API")
@@ -49,7 +52,7 @@ public class OpenApiConfig {
                                 + "auth, sellers, customers, admins, products, orders, "
                                 + "payments, OTP, WhatsApp.")
                         .contact(new Contact().name("ProfitSaathi Platform")))
-                .servers(List.of(gateway, direct))
+                .servers(List.of(server))
                 .components(new Components().addSecuritySchemes("bearerAuth", bearerScheme))
                 .addSecurityItem(new SecurityRequirement().addList("bearerAuth"));
     }
