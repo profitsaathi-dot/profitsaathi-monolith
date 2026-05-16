@@ -53,6 +53,5 @@ services:
 
 volumes:
   pg_data:
-  redis_data:
   waha_sessions:
   app_uploads:
