@@ -21,6 +21,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
+import org.springframework.cache.annotation.CacheEvict;
 
 @AllArgsConstructor
 @Service
@@ -31,8 +32,8 @@ public class ProductService {
     private final AESService aesService;
     private final ObjectMapper objectMapper;
     private final ProductConfig productConfig;
-    private final CacheManager cacheManager;
 
+    @CacheEvict(value = "sellerProducts", key = "#sellerId")
     @Transactional
     public void addProduct(Long sellerId, String encryptedJson, List<MultipartFile> media, int mainImageIndex) throws Exception {
         Seller seller = sellerRepository.findById(sellerId)
@@ -65,9 +66,9 @@ public class ProductService {
         entity.setMainImageIndex((mainImageIndex >= 0 && mainImageIndex < mediaPaths.size()) ? mainImageIndex : 0);
 
         productRepository.save(entity);
-        evictSellerCache(seller.getId());
+        //evictSellerCache(seller.getId());
     }
-
+    @CacheEvict(value = "sellerProducts", key = "#sellerId")
     @Transactional
     public void updateProduct(String encryptedJson, List<MultipartFile> media, int mainImageIndex) throws Exception {
         String decryptedJson = aesService.decryptToJson(encryptedJson);
@@ -105,7 +106,7 @@ public class ProductService {
         }
 
         productRepository.save(existing);
-        evictSellerCache(sellerId);
+        //evictSellerCache(sellerId);
     }
 
     /**
@@ -246,10 +247,7 @@ public class ProductService {
         return productRepository.findBySellerId(sellerId, pageable);
     }
 
-    private void evictSellerCache(Long sellerId) {
-        org.springframework.cache.Cache cache = cacheManager.getCache("sellerProducts");
-        if (cache != null) cache.evict(sellerId);
-    }
+
 
     private Map<String, Object> mapToSimpleMap(Product p) {
         Map<String, Object> map = new HashMap<>();
