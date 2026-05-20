@@ -36,23 +36,6 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                   @Param("year") int year);
 
     /**
-     * @deprecated bug: sums {@code totalCost} (COGS), not sales. Use
-     *     {@link #getRevenueForMonth} for actual revenue. Kept temporarily
-     *     so admin/legacy callers don't break — remove once they migrate.
-     */
-    @Deprecated
-    @Query("""
-        SELECT COALESCE(SUM(o.totalCost), 0)
-        FROM Order o
-        WHERE o.seller = :seller
-          AND MONTH(o.createdAt) = :month
-          AND YEAR(o.createdAt) = :year
-    """)
-    BigDecimal getTotalSalesForMonth(@Param("seller") Seller seller,
-                                     @Param("month") int month,
-                                     @Param("year") int year);
-
-    /**
      * COGS for the given seller-month — sum of order {@code totalCost}, which
      * {@code OrderService.createOrder} populates as {@code costPrice ×
      * quantity}. Name kept for callers; semantically this is cost of goods
@@ -167,6 +150,74 @@ public interface OrderRepository extends JpaRepository<Order, Long> {
                                 @Param("year") int year);
 
     Page<Order> findBySeller(Seller seller, Pageable pageable);
+
+    /**
+     * Find orders by seller with JOIN FETCH to avoid N+1 queries.
+     * Use this instead of findBySeller when you need to serialize orders.
+     */
+    @Query("""
+        SELECT DISTINCT o FROM Order o
+        LEFT JOIN FETCH o.seller
+        LEFT JOIN FETCH o.product
+        WHERE o.seller = :seller
+    """)
+    java.util.List<Order> findBySellerWithRelations(@Param("seller") Seller seller);
+
+    /**
+     * Find single order by ID with JOIN FETCH.
+     * Use this for single order lookups that will be serialized.
+     */
+    @Query("""
+        SELECT o FROM Order o
+        LEFT JOIN FETCH o.seller
+        LEFT JOIN FETCH o.product
+        WHERE o.id = :id
+    """)
+    Optional<Order> findByIdWithRelations(@Param("id") Long id);
+
+    /**
+     * Find order by order number with JOIN FETCH.
+     */
+    @Query("""
+        SELECT o FROM Order o
+        LEFT JOIN FETCH o.seller
+        LEFT JOIN FETCH o.product
+        WHERE o.orderNo = :orderNo
+    """)
+    Optional<Order> findByOrderNoWithRelations(@Param("orderNo") String orderNo);
+
+    /**
+     * Find order by public token with JOIN FETCH.
+     */
+    @Query("""
+        SELECT o FROM Order o
+        LEFT JOIN FETCH o.seller
+        LEFT JOIN FETCH o.product
+        WHERE o.publicToken = :publicToken
+    """)
+    Optional<Order> findByPublicTokenWithRelations(@Param("publicToken") String publicToken);
+
+    /**
+     * Find order by order number (case-insensitive) with JOIN FETCH.
+     */
+    @Query("""
+        SELECT o FROM Order o
+        LEFT JOIN FETCH o.seller
+        LEFT JOIN FETCH o.product
+        WHERE LOWER(o.orderNo) = LOWER(:orderNo)
+    """)
+    Optional<Order> findByOrderNoIgnoreCaseWithRelations(@Param("orderNo") String orderNo);
+
+    /**
+     * Find order by ID and seller ID with JOIN FETCH.
+     */
+    @Query("""
+        SELECT o FROM Order o
+        LEFT JOIN FETCH o.seller
+        LEFT JOIN FETCH o.product
+        WHERE o.id = :id AND o.seller.id = :sellerId
+    """)
+    Optional<Order> findByIdAndSeller_IdWithRelations(@Param("id") Long id, @Param("sellerId") Long sellerId);
 
     Optional<Order> findByOrderNo(String orderNo);
     Optional<Order> findByOrderNoIgnoreCase(String orderNo);

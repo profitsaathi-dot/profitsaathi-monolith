@@ -1,5 +1,6 @@
 package com.profitsaathi.seller.whatsapp.OpenWA;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.profitsaathi.seller.whatsapp.Entity.WhatsAppSession;
 import com.profitsaathi.seller.whatsapp.Repo.WhatsAppSessionRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -18,10 +19,10 @@ public class OpenWAClient {
         private final RestTemplate restTemplate = new RestTemplate();
         private final WhatsAppSessionRepository whatsAppSessionRepository;
 
-        @Value("${profitsaathi.whatsapp.openWA.url:http://localhost:2785/api}")
+        @Value("${profitsaathi.whatsapp.openWA.url}")
         private String baseUrl;
 
-        @Value("${profitsaathi.whatsapp.OpenWA.api-key:}")
+        @Value("${profitsaathi.whatsapp.OpenWA.api-key}")
         private String apiKey;
 
         public OpenWAClient(WhatsAppSessionRepository whatsAppSessionRepository) {
@@ -52,12 +53,12 @@ public class OpenWAClient {
 
             try {
                 ResponseEntity<Map> resp = restTemplate.exchange(
-                        baseUrl + "/api/sessions/webhook",
+                        baseUrl + "/api/sessions",
                         HttpMethod.POST,
                         new HttpEntity<>(body, headers()),
                         Map.class);
                 return resp.getBody();
-            } catch (HttpClientErrorException.UnprocessableEntity already) {
+            } catch (HttpClientErrorException.Conflict already) {
                 log.info("openWA: session '{}' already exists, fetching state", name);
                 Optional<WhatsAppSession> wb = whatsAppSessionRepository.findBySessionName(name);
 
@@ -96,7 +97,7 @@ public class OpenWAClient {
             try {
                 ///api/sessions/{sessionId}/webhooks
                 ResponseEntity<Map> resp = restTemplate.exchange(
-                        baseUrl + "/api/sessions/" + sessionId + "webhooks",
+                        baseUrl + "/api/sessions/" + sessionId,
                         HttpMethod.GET,
                         new HttpEntity<>(headers()),
                         Map.class);
@@ -113,29 +114,77 @@ public class OpenWAClient {
 
         }
 
-        public Map<String, Object> getQrRaw(String name) {
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getQrRaw(String sessionId) {
+
         HttpHeaders h = new HttpHeaders();
-        h.setAccept(List.of(MediaType.IMAGE_PNG, MediaType.ALL));
-        if (apiKey != null && !apiKey.isEmpty()) h.set("X-Api-Key", apiKey);
+        h.setAccept(List.of(MediaType.APPLICATION_JSON));
+
+        if (apiKey != null && !apiKey.isEmpty()) {
+            h.set("X-Api-Key", apiKey);
+        }
+
         try {
-            ResponseEntity<byte[]> resp = restTemplate.exchange(
-                    baseUrl + "/api/" + name + "/auth/qr",
+
+            ResponseEntity<Map> resp = restTemplate.exchange(
+                    baseUrl + "/api/sessions/" + sessionId + "/qr",
                     HttpMethod.GET,
                     new HttpEntity<>(h),
-                    byte[].class);
-            byte[] bytes = resp.getBody();
-            if (bytes == null || bytes.length == 0) return null;
+                    Map.class
+            );
+
+            Map<String, Object> response = resp.getBody();
+
+            if (response == null || resp.getStatusCode() != HttpStatus.OK) {
+                return null;
+            }
+
+            String status = String.valueOf(response.get("status"));
+
+            // Only return QR when ready
+            if (!"qr_ready".equalsIgnoreCase(status)) {
+                return null;
+            }
+
+            Object qrCodeObj = response.get("qrCode");
+
+            if (qrCodeObj == null) {
+                return null;
+            }
+
+            String qrCode = qrCodeObj.toString();
+
             Map<String, Object> result = new HashMap<>();
-            result.put("value", Base64.getEncoder().encodeToString(bytes));
-            result.put("mimetype", "image/png");
+
+
+            if (qrCode.startsWith("data:")) {
+                String[] parts = qrCode.split(",", 2);
+
+                String meta = parts[0];
+                String base64 = parts[1];
+
+                String mimeType = meta
+                        .replace("data:", "")
+                        .replace(";base64", "");
+
+                result.put("value", base64);
+                result.put("mimetype", mimeType);
+            }
+
+            //result.put("mimetype", "image/png");
+
             return result;
+
         } catch (HttpStatusCodeException e) {
-            log.debug("Open WA getQr({}) returned {}: {}",
-                    name, e.getStatusCode(), e.getResponseBodyAsString());
+
+            log.debug("OpenWA getQr({}) returned {}: {}",
+                    sessionId,
+                    e.getStatusCode(),
+                    e.getResponseBodyAsString());
+
             return null;
         }
     }
-
         ///api/sessions/{sessionId}/messages/send-text
         public void sendText(String session, String chatId, String text) {
         Map<String, Object> body = new HashMap<>();
@@ -155,19 +204,30 @@ public class OpenWAClient {
         }
     }
 
-        public void startSession(String SessionId) {
-        try {
-            restTemplate.exchange(
-                    baseUrl + "/api/sessions/" + SessionId + "/start",
-                    HttpMethod.POST,
-                    new HttpEntity<>(headers()),
-                    Void.class);
-        } catch (HttpStatusCodeException e) {
-            log.error("WAHA startSession failed: status={}, body={}",
-                    e.getStatusCode(), e.getResponseBodyAsString());
-            throw new RuntimeException("WAHA " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
+
+        @SuppressWarnings("unchecked")
+        public Map<String, Object> startSession(String sessionId) {
+            try {
+                ResponseEntity<Map> resp = restTemplate.exchange(
+                        baseUrl + "/api/sessions/" + sessionId + "/start",
+                        HttpMethod.POST,
+                        new HttpEntity<>(headers()),
+                        Map.class
+                );
+
+                return resp.getBody();
+
+            } catch (HttpStatusCodeException e) {
+                log.error("OpenWA startSession failed: status={}, body={}",
+                        e.getStatusCode(),
+                        e.getResponseBodyAsString());
+
+                throw new RuntimeException(
+                        "OpenWA " + e.getStatusCode() + ": " + e.getResponseBodyAsString(),
+                        e
+                );
+            }
         }
-    }
 
         public void stopSession(String SessionId) {
         callSafe(HttpMethod.POST, "/api/sessions/" + SessionId + "/stop");

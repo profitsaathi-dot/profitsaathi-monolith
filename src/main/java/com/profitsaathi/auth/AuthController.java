@@ -79,4 +79,14 @@ public class AuthController {
     public AuthenticatedPrincipal me(@AuthenticationPrincipal AuthenticatedPrincipal me) {
         return me;
     }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<AuthDtos.ApiResponse> forgotPassword(@Valid @RequestBody AuthDtos.ForgotPasswordRequest req) {
+        return ResponseEntity.ok(authService.forgotPassword(req));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<AuthDtos.ApiResponse> resetPassword(@Valid @RequestBody AuthDtos.ResetPasswordRequest req) {
+        return ResponseEntity.ok(authService.resetPassword(req));
+    }
 }

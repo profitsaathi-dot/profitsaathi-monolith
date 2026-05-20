@@ -35,6 +35,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final WelcomeMailService welcomeMailService;
+    private final com.profitsaathi.otp.OtpService otpService;
 
     /** Shared secret required to register an ADMIN. Empty value disables the endpoint. */
     @Value("${security.admin.signup-secret:}")
@@ -282,5 +283,79 @@ public class AuthService {
                 c.getRole().name(),
                 c.getSubjectId(),
                 c.getEmail());
+    }
+
+    /**
+     * Send password reset OTP to user's email
+     */
+    @Transactional
+    public ApiResponse forgotPassword(ForgotPasswordRequest req) {
+        String email = req.email().trim().toLowerCase();
+        
+        // Check if email exists in credentials
+        Credentials credentials = credentialsRepo.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Email not found"));
+        
+        if (!credentials.isEnabled()) {
+            throw new IllegalStateException("Account is disabled");
+        }
+        
+        // Get user name based on role
+        String userName = getUserName(credentials);
+        
+        // Send OTP via email
+        otpService.sendEmailOtp(List.of(email), List.of(), userName);
+        
+        log.info("Password reset OTP sent to: {}", email);
+        
+        return new ApiResponse(true, "Password reset OTP sent to your email");
+    }
+
+    /**
+     * Reset password using OTP verification
+     */
+    @Transactional
+    public ApiResponse resetPassword(ResetPasswordRequest req) {
+        String email = req.email().trim().toLowerCase();
+        
+        // Verify OTP first
+        try {
+            otpService.verifyOtp(email, req.otp(), true);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid or expired OTP: " + e.getMessage());
+        }
+        
+        // Find credentials
+        Credentials credentials = credentialsRepo.findByEmail(email)
+                .orElseThrow(() -> new IllegalArgumentException("Email not found"));
+        
+        if (!credentials.isEnabled()) {
+            throw new IllegalStateException("Account is disabled");
+        }
+        
+        // Update password
+        credentials.setPasswordHash(passwordEncoder.encode(req.newPassword()));
+        credentialsRepo.save(credentials);
+        
+        log.info("Password reset successful for: {}", email);
+        
+        return new ApiResponse(true, "Password reset successful. You can now login with your new password.");
+    }
+
+    /**
+     * Helper method to get user name based on role
+     */
+    private String getUserName(Credentials credentials) {
+        return switch (credentials.getRole()) {
+            case SELLER -> sellerRepo.findById(credentials.getSubjectId())
+                    .map(Seller::getName)
+                    .orElse("User");
+            case CUSTOMER -> customerRepo.findById(credentials.getSubjectId())
+                    .map(Customer::getName)
+                    .orElse("User");
+            case ADMIN -> adminRepo.findById(credentials.getSubjectId())
+                    .map(Admin::getName)
+                    .orElse("Admin");
+        };
     }
 }

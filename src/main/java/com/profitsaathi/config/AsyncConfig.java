@@ -17,14 +17,13 @@ public class AsyncConfig implements AsyncConfigurer {
 
     /**
      * Pool used by EmailService / WhatsAppService and any other {@code @Async}
-     * background work. Size is conservative — the trial-stage app is single
-     * JVM and we don't want notification bursts to starve the request path.
+     * background work. Increased from 8 to 25 max threads for better throughput.
      */
     @Bean(name = "notificationExecutor")
     public Executor notificationExecutor() {
         ThreadPoolTaskExecutor exec = new ThreadPoolTaskExecutor();
-        exec.setCorePoolSize(4);
-        exec.setMaxPoolSize(8);
+        exec.setCorePoolSize(8);
+        exec.setMaxPoolSize(25);
         exec.setQueueCapacity(500);
         exec.setThreadNamePrefix("notify-");
         exec.setWaitForTasksToCompleteOnShutdown(true);

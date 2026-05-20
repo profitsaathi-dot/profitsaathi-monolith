@@ -33,7 +33,7 @@ public class ProductService {
     private final ObjectMapper objectMapper;
     private final ProductConfig productConfig;
 
-    //@CacheEvict(value = "sellerProducts", key = "#sellerId")
+    @CacheEvict(value = "sellerProducts", key = "#sellerId")
     @Transactional
     public void addProduct(Long sellerId, String encryptedJson, List<MultipartFile> media, int mainImageIndex) throws Exception {
         Seller seller = sellerRepository.findById(sellerId)
@@ -66,11 +66,9 @@ public class ProductService {
         entity.setMainImageIndex((mainImageIndex >= 0 && mainImageIndex < mediaPaths.size()) ? mainImageIndex : 0);
 
         productRepository.save(entity);
-        //evictSellerCache(seller.getId());
     }
-    //@CacheEvict(value = "sellerProducts", key = "#sellerId")
     @Transactional
-    public void updateProduct(String encryptedJson, List<MultipartFile> media, int mainImageIndex) throws Exception {
+    public void updateProduct(String encryptedJson, List<MultipartFile> media, String keepIndicesJson, int mainImageIndex) throws Exception {
         String decryptedJson = aesService.decryptToJson(encryptedJson);
         if (decryptedJson == null || decryptedJson.isEmpty()) throw new RuntimeException("Invalid request data");
 
@@ -97,16 +95,69 @@ public class ProductService {
         List<String> currentMedia = existing.getImagePaths() != null
                 ? new ArrayList<>(existing.getImagePaths()) : new ArrayList<>();
 
-        // Updated: Handle media during update
-        List<String> updated = saveMedia(media, currentMedia);
-        existing.setImagePaths(updated);
+        // Parse keepIndices to know which existing media to keep
+        List<Integer> keepIndices = new ArrayList<>();
+        if (keepIndicesJson != null && !keepIndicesJson.isEmpty()) {
+            try {
+                keepIndices = objectMapper.readValue(keepIndicesJson, 
+                    objectMapper.getTypeFactory().constructCollectionType(List.class, Integer.class));
+            } catch (Exception e) {
+                // If parsing fails, keep all existing media
+                for (int i = 0; i < currentMedia.size(); i++) {
+                    keepIndices.add(i);
+                }
+            }
+        }
 
-        if (updated != null && mainImageIndex >= 0 && mainImageIndex < updated.size()) {
+        // Build new media list: keep specified existing media + add new uploads
+        List<String> updatedMedia = new ArrayList<>();
+        
+        // First, add the media we want to keep from existing
+        for (Integer idx : keepIndices) {
+            if (idx >= 0 && idx < currentMedia.size()) {
+                updatedMedia.add(currentMedia.get(idx));
+            }
+        }
+        
+        // Delete media that are not being kept
+        for (int i = 0; i < currentMedia.size(); i++) {
+            if (!keepIndices.contains(i)) {
+                deleteOldFile(currentMedia.get(i));
+            }
+        }
+        
+        // Then, add new uploaded media
+        if (media != null && !media.isEmpty()) {
+            for (int i = 0; i < Math.min(media.size(), 6 - updatedMedia.size()); i++) {
+                MultipartFile file = media.get(i);
+                if (file != null && !file.isEmpty()) {
+                    String filename = buildSafeFilename(file, updatedMedia.size() + i);
+                    Path path = Paths.get(productConfig.getUploadDir(), filename);
+                    Files.createDirectories(path.getParent());
+                    Files.write(path, file.getBytes());
+                    updatedMedia.add(filename);
+                }
+            }
+        }
+        
+        existing.setImagePaths(updatedMedia);
+
+        if (updatedMedia != null && mainImageIndex >= 0 && mainImageIndex < updatedMedia.size()) {
             existing.setMainImageIndex(mainImageIndex);
+        } else {
+            existing.setMainImageIndex(0);
         }
 
         productRepository.save(existing);
-        //evictSellerCache(sellerId);
+        evictSellerCache(sellerId);
+    }
+    
+    /**
+     * Manually evict seller product cache
+     */
+    @CacheEvict(value = "sellerProducts", key = "#sellerId")
+    public void evictSellerCache(Long sellerId) {
+        // Cache eviction handled by annotation
     }
 
     /**

@@ -78,4 +78,19 @@ public class AuthDtos {
             Long subjectId,
             String email
     ) {}
+
+    public record ForgotPasswordRequest(
+            @NotBlank @Email String email
+    ) {}
+
+    public record ResetPasswordRequest(
+            @NotBlank @Email String email,
+            @NotBlank String otp,
+            @NotBlank @Size(min = 8, max = 100) String newPassword
+    ) {}
+
+    public record ApiResponse(
+            boolean success,
+            String message
+    ) {}
 }

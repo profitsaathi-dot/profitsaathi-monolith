@@ -25,7 +25,7 @@ public class OpenWhatsAppSessionController {
         try {
             return ResponseEntity.ok(service.connect(me.subjectId()));
         } catch (Exception e) {
-            log.error("/whatsapp/connect failed", e);
+            log.error("/whatsapp/open/connect failed", e);
             return ResponseEntity.status(500).body(Collections.singletonMap("message", e.getMessage()));
         }
     }

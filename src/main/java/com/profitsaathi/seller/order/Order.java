@@ -24,11 +24,9 @@ public class Order {
 
     private String orderNo;
 
-    // EAGER: getSellerSummary() reads seller.id/name on every JSON write, so a
-    // lazy proxy guarantees a LazyInitializationException once the Hibernate
-    // session closes (open-in-view=false). Loading the row up-front avoids
-    // that round-trip-after-commit class of bug.
-    @ManyToOne(fetch = FetchType.EAGER)
+    // LAZY: Use JOIN FETCH in queries or OrderDTO for serialization to avoid
+    // N+1 queries. Controllers should return OrderDTO instead of Order entity.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "seller_id", nullable = false)
     @JsonIgnore
     private Seller seller;
@@ -52,9 +50,9 @@ public class Order {
     @Column(nullable = false)
     private String address;
 
-    // EAGER for the same reason as `seller` above — getProductSummary() always
-    // reads it during serialization.
-    @ManyToOne(fetch = FetchType.EAGER)
+    // LAZY: Use JOIN FETCH in queries or OrderDTO for serialization to avoid
+    // N+1 queries. Controllers should return OrderDTO instead of Order entity.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "product_id", nullable = false)
     @JsonIgnore
     private Product product;

@@ -31,12 +31,9 @@ public class CustomerAddress {
     @Builder.Default
     private Boolean isDefault = Boolean.FALSE;
 
-    // EAGER: getCustomerInfo() reads customer.id/name on every JSON write,
-    // and updateAddress/deleteAddress also touch existing.getCustomer().getId()
-    // outside any explicit transaction. open-in-view=false makes both paths
-    // hard-fail with LazyInitializationException unless customer is loaded
-    // up-front.
-    @ManyToOne(fetch = FetchType.EAGER)
+    // LAZY: Changed from EAGER to LAZY to prevent automatic loading.
+    // Use JOIN FETCH queries in repository when customer data is needed.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "customer_id")
     @JsonIgnore
     private Customer customer;

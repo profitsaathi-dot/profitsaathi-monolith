@@ -1,6 +1,9 @@
 package com.profitsaathi.seller.aichat;
 
 import com.profitsaathi.seller.user.Seller;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -11,6 +14,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Routes a chat call through the seller's preferred provider, then falls
@@ -24,6 +28,11 @@ import java.util.Set;
  * counted as a fallback-eligible failure but their error is preserved so we
  * can surface it if everything else also fails. Network / 5xx failures
  * ({@link IllegalStateException}) likewise fall through.
+ * 
+ * Circuit breaker protection:
+ * - Automatically opens circuit after 50% failure rate
+ * - Prevents cascading failures to external AI services
+ * - Provides graceful degradation with fallback message
  */
 @Slf4j
 @Component
@@ -35,6 +44,13 @@ public class AiChatProviderRouter {
     private final NvidiaChatProvider nvidia;
 
     public record Result(AiProvider providerUsed, String reply) {}
+
+    @CircuitBreaker(name = "aiService", fallbackMethod = "chatFallback")
+    @Retry(name = "aiService")
+    @TimeLimiter(name = "aiService")
+    public CompletableFuture<Result> chatAsync(Seller seller, List<ChatTurn> history, ChatTurn current) {
+        return CompletableFuture.supplyAsync(() -> chat(seller, history, current));
+    }
 
     public Result chat(Seller seller, List<ChatTurn> history, ChatTurn current) {
         Map<AiProvider, ChatProvider> impls = new EnumMap<>(AiProvider.class);
@@ -82,6 +98,23 @@ public class AiChatProviderRouter {
             throw new NoAiProviderConfiguredException();
         }
         throw new AllAiProvidersFailedException(failures);
+    }
+
+    /**
+     * Fallback method when circuit breaker opens or all retries exhausted.
+     * Provides graceful degradation instead of complete failure.
+     */
+    private CompletableFuture<Result> chatFallback(Seller seller, List<ChatTurn> history, 
+                                                   ChatTurn current, Exception e) {
+        log.error("[router] Circuit breaker fallback triggered for seller {}: {}", 
+                 seller.getId(), e.getMessage());
+        
+        String fallbackMessage = "I apologize, but I'm temporarily unable to process your request. " +
+                                "Our AI service is experiencing high load. Please try again in a few moments.";
+        
+        return CompletableFuture.completedFuture(
+            new Result(AiProvider.GEMINI, fallbackMessage)
+        );
     }
 
     private static String keyFor(Seller s, AiProvider p) {

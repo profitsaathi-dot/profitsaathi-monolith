@@ -38,15 +38,15 @@ public class OpenWAWhatsAppSessionService {
             WhatsAppSessionRepository sessionRepository,
             SellerWhatsAppMessageRepository messageRepository,
             SellerRepository sellerRepository,
-            OpenWAClient openWAClient, OpenWAClient openWAClient1,
-            @Value("${waha.webhook-public-url:http://host.docker.internal:9090/api/v1/whatsapp/webhook}")
+            OpenWAClient openWAClient,
+            @Value("${open.wa.webhook-public-url}")
             String webhookUrl,
-            @Value("${waha.session-name-mode:default}")
+            @Value("${open.wa.session-name-mode:default}")
             String sessionNameMode) {
         this.sessionRepository = sessionRepository;
         this.messageRepository = messageRepository;
         this.sellerRepository = sellerRepository;
-        this.openWAClient = openWAClient1;
+        this.openWAClient = openWAClient;
         this.webhookUrl = webhookUrl;
         this.sessionNameMode = sessionNameMode;
     }
@@ -77,7 +77,7 @@ public class OpenWAWhatsAppSessionService {
         }
 
         session = renameIfStale(session, sellerId);
-        Map<String, Object> wahaSession = openWAClient.getSession(session.getSessionName());
+        Map<String, Object> wahaSession = openWAClient.getSession(session.getSessionId());
         if (wahaSession != null) applyWahaState(session, wahaSession);
 
         return composeStatusPayload(session);
@@ -94,7 +94,7 @@ public class OpenWAWhatsAppSessionService {
         session.setConnected(false);
         sessionRepository.save(session);
 
-        Map<String, Object> wahaSession = openWAClient.getSession(session.getSessionName());
+        Map<String, Object> wahaSession = openWAClient.getSession(session.getSessionId());
         if (wahaSession != null) applyWahaState(session, wahaSession);
 
         return composeStatusPayload(session);
@@ -154,7 +154,7 @@ public class OpenWAWhatsAppSessionService {
                 Object status = map.get("status");
                 if (status != null) {
                     session.setStatus(status.toString());
-                    session.setConnected("WORKING".equalsIgnoreCase(status.toString()));
+                    session.setConnected("READY".equalsIgnoreCase(status.toString()));
                     sessionRepository.save(session);
                 }
             }
@@ -204,7 +204,7 @@ public class OpenWAWhatsAppSessionService {
 
     private String desiredSessionName(Seller seller) {
         if ("per-user".equalsIgnoreCase(sessionNameMode) && seller != null) {
-            return "seller_" + seller.getId();
+            return "seller" + seller.getId();
         }
         return "default";
     }
@@ -213,17 +213,24 @@ public class OpenWAWhatsAppSessionService {
         Object status = wahaSession.get("status");
         if (status != null) {
             session.setStatus(status.toString());
-            session.setConnected("WORKING".equalsIgnoreCase(status.toString()));
-        }
-        Object me = wahaSession.get("me");
-        if (me instanceof Map<?, ?> meMap) {
-            String id = asString(meMap.get("id"));
-            String phone = asString(meMap.get("phone"));
+            String s = status.toString().toUpperCase();
 
+            session.setConnected(
+                    s.equals("READY")
+                            || s.equals("WORKING")
+                            || s.equals("CONNECTED")
+            );
+
+        }
+        Object id = wahaSession.get("id");
+        if(id != null) {
+            session.setSessionId(id.toString());
+        }
+        Object phonenumber = wahaSession.get("phone");
+        if(phonenumber!=null) {
+            String phone = phonenumber.toString();
             if (phone != null && phone.contains("@")) phone = phone.substring(0, phone.indexOf('@'));
             session.setPhoneNumber(phone);
-            session.setSessionId(id);
-            session.setPushName(asString(meMap.get("pushName")));
         }
         sessionRepository.save(session);
     }
@@ -237,20 +244,37 @@ public class OpenWAWhatsAppSessionService {
         out.put("pushName", session.getPushName());
 
         if("created".equalsIgnoreCase(session.getStatus())) {
-            //Map<String, Object> start = openWAClient.startSession(session.getSessionId());
+            Map<String, Object> start = openWAClient.startSession(session.getSessionId());
+           String status= start.get("status").toString();
+           if(status.equalsIgnoreCase("initializing")) {
+               Map<String, Object> qr = openWAClient.getQrRaw(session.getSessionId());
+               if (qr != null) {
+                   Object value = qr.get("value");
+                   Object mimetype = qr.get("mimetype");
+                   if (value != null) {
+                       out.put("qrBase64", value);
+                       out.put("qrMimetype", mimetype != null ? mimetype : "image/png");
+                   }
+               }
+           }
         }
 
-        if ("SCAN_QR_CODE".equalsIgnoreCase(session.getStatus())) {
-            Map<String, Object> qr = openWAClient.getQrRaw(session.getSessionName());
+
+        if("qr_ready".equalsIgnoreCase(session.getStatus()) || "initializing".equalsIgnoreCase(session.getStatus()))
+        {
+            System.out.println("QR code started ");
+            Map<String, Object> qr = openWAClient.getQrRaw(session.getSessionId());
             if (qr != null) {
                 Object value = qr.get("value");
                 Object mimetype = qr.get("mimetype");
+
                 if (value != null) {
                     out.put("qrBase64", value);
                     out.put("qrMimetype", mimetype != null ? mimetype : "image/png");
                 }
             }
         }
+
         return out;
     }
 

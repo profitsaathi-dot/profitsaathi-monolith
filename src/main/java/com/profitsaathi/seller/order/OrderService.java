@@ -178,8 +178,11 @@ public class OrderService {
         Page<Order> orders = orderRepository.searchOwnerOrders(
                 seller, statusFilter, productId, searchFilter, pageable);
 
+        // Convert to DTOs to avoid N+1 queries
         return ResponseEntity.ok(Map.of(
-                "content", orders.getContent(),
+                "content", orders.getContent().stream()
+                        .map(OrderDTO::fromEntity)
+                        .toList(),
                 "currentPage", orders.getNumber(),
                 "totalItems", orders.getTotalElements(),
                 "totalPages", orders.getTotalPages()));
@@ -187,7 +190,7 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<?> getPublicTracking(String publicToken) {
-        return orderRepository.findByPublicToken(publicToken)
+        return orderRepository.findByPublicTokenWithRelations(publicToken)
                 .<ResponseEntity<?>>map(o -> ResponseEntity.ok(buildTrackingPayload(o)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("message", "Order not found")));
@@ -199,7 +202,7 @@ public class OrderService {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(Map.of("message", "Order ID is required"));
         }
-        return orderRepository.findByOrderNoIgnoreCase(orderNo.trim())
+        return orderRepository.findByOrderNoIgnoreCaseWithRelations(orderNo.trim())
                 .<ResponseEntity<?>>map(o -> ResponseEntity.ok(buildTrackingPayload(o)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("message", "No order found with that ID")));
@@ -250,9 +253,9 @@ public class OrderService {
     public ResponseEntity<?> getPublicRefundProof(String publicToken, String orderNo) {
         Optional<Order> orderOpt;
         if (publicToken != null && !publicToken.isBlank()) {
-            orderOpt = orderRepository.findByPublicToken(publicToken);
+            orderOpt = orderRepository.findByPublicTokenWithRelations(publicToken);
         } else if (orderNo != null && !orderNo.isBlank()) {
-            orderOpt = orderRepository.findByOrderNoIgnoreCase(orderNo.trim());
+            orderOpt = orderRepository.findByOrderNoIgnoreCaseWithRelations(orderNo.trim());
         } else {
             return ResponseEntity.badRequest().body(Map.of("message", "Lookup key is required"));
         }
@@ -297,8 +300,8 @@ public class OrderService {
 
     @Transactional(readOnly = true)
     public ResponseEntity<?> getOrderById(AuthenticatedPrincipal me, Long id) {
-        return orderRepository.findByIdAndSeller_Id(id, me.subjectId())
-                .<ResponseEntity<?>>map(ResponseEntity::ok)
+        return orderRepository.findByIdAndSeller_IdWithRelations(id, me.subjectId())
+                .<ResponseEntity<?>>map(order -> ResponseEntity.ok(OrderDTO.fromEntity(order)))
                 .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
                         .body(Map.of("message", "Order not found")));
     }
@@ -404,8 +407,11 @@ public class OrderService {
             orders = orderRepository.findByPhoneNumber(phoneNumber, pageable);
         }
 
+        // Convert to DTOs to avoid N+1 queries
         return ResponseEntity.ok(Map.of(
-                "content", orders.getContent(),
+                "content", orders.getContent().stream()
+                        .map(OrderDTO::fromEntity)
+                        .toList(),
                 "currentPage", orders.getNumber(),
                 "totalItems", orders.getTotalElements(),
                 "totalPages", orders.getTotalPages()));

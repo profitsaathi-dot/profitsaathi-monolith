@@ -47,7 +47,9 @@ public class SecurityConfig {
                                          "/api/v1/auth/login",
                                          "/api/v1/auth/passkeys/login",
                                          "/api/v1/auth/oauth/google",
-                                         "/api/v1/auth/refresh").permitAll()
+                                         "/api/v1/auth/refresh",
+                                         "/api/v1/auth/forgot-password",
+                                         "/api/v1/auth/reset-password").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/passkeys/credential/*").permitAll()
 
                         // Public Store endpoints (used get store details in user)
@@ -72,6 +74,11 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/order/track/**",
                                          "/api/v1/order/track-by-no/**").permitAll()
 
+                        // Public review endpoints (anyone can submit/view reviews)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/reviews/order/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/reviews/order/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/reviews/product/**").permitAll()
+
                         // Public order creation — buyers placing orders from a
                         // seller's storefront (purchaseType=DIRECT) bypass auth
                         // entirely; the seller is resolved from the product
@@ -91,6 +98,8 @@ public class SecurityConfig {
 
                         // WAHA inbound webhook
                         .requestMatchers("/api/v1/whatsapp/webhook").permitAll()
+                        // OPEN WA
+                        .requestMatchers("/api/v1/whatsapp/open/webhook").permitAll()
 
                         // Health/metrics
                         .requestMatchers("/actuator/health/**",

@@ -60,6 +60,7 @@ public class SaathiAiService {
     private final AiChatProviderRouter chatRouter;
     private final ImageGenRouter imageRouter;
     private final SaathiImageStorage imageStorage;
+    private final com.profitsaathi.seller.aichat.imagegen.ImageCompressor imageCompressor;
 
     // ─────────────────────────────────────────────────────────────────────
     // Chat send
@@ -157,6 +158,10 @@ public class SaathiAiService {
      * from disk so multimodal models keep "remembering" the product. Image
      * bytes are only attached to the most recent {@link #MAX_HISTORY_IMAGES}
      * to keep request size in check.
+     *
+     * <p>Images are compressed on-the-fly (resize to 1024×1024, JPEG 85%)
+     * to reduce memory usage from ~4MB per image to ~100KB per image.
+     * This allows keeping more images in history without hitting API limits.
      */
     private List<ChatTurn> buildHistoryWithImages(Long sessionId) {
         List<AiChatMessage> all = messageRepository.findBySessionIdOrderByIdAsc(sessionId);
@@ -180,6 +185,26 @@ public class SaathiAiService {
             if (replay.contains(m.getId())) {
                 try {
                     byte[] bytes = imageStorage.loadBytes(m.getImagePath());
+                    
+                    // Compress image for history to reduce memory usage
+                    // (4MB → ~100KB per image)
+                    if (imageCompressor.shouldCompress(bytes)) {
+                        try {
+                            com.profitsaathi.seller.aichat.imagegen.ImageGenResult compressed =
+                                    imageCompressor.compress(bytes, m.getImageMime());
+                            bytes = compressed.bytes();
+                            // Update MIME to JPEG (compression always outputs JPEG)
+                            String b64 = java.util.Base64.getEncoder().encodeToString(bytes);
+                            history.add(new ChatTurn(role, m.getContent(), compressed.mimeType(), b64));
+                            continue;
+                        } catch (IOException e) {
+                            log.warn("Image compression failed for {} — using original: {}",
+                                    m.getImagePath(), e.getMessage());
+                            // Fall through to use original bytes
+                        }
+                    }
+                    
+                    // Use original bytes (either small enough or compression failed)
                     String b64 = java.util.Base64.getEncoder().encodeToString(bytes);
                     history.add(new ChatTurn(role, m.getContent(), m.getImageMime(), b64));
                     continue;

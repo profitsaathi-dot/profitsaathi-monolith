@@ -22,10 +22,32 @@ public class CartService {
     private final CartItemRepository cartItemRepository;
     private final ProductRepository productRepository;
 
+    /**
+     * Get cart items for customer with optimized product fetching.
+     * Uses IN clause to fetch all products in one query instead of N+1.
+     */
     public List<CartItemResponseDTO> getCartForCustomer(Long customerId) {
-        return cartItemRepository.findByCustomerId(customerId).stream()
+        List<CartItem> cartItems = cartItemRepository.findByCustomerId(customerId);
+        
+        if (cartItems.isEmpty()) {
+            return List.of();
+        }
+        
+        // Extract all product IDs
+        List<Long> productIds = cartItems.stream()
+                .map(CartItem::getProductId)
+                .distinct()
+                .toList();
+        
+        // Fetch all products in ONE query
+        List<Product> products = productRepository.findAllById(productIds);
+        Map<Long, Product> productMap = products.stream()
+                .collect(HashMap::new, (map, p) -> map.put(p.getId(), p), HashMap::putAll);
+        
+        // Map cart items to response DTOs
+        return cartItems.stream()
                 .map(item -> {
-                    Product product = productRepository.findById(item.getProductId()).orElse(null);
+                    Product product = productMap.get(item.getProductId());
 
                     CartItemResponseDTO response = new CartItemResponseDTO();
                     response.setId(item.getId());

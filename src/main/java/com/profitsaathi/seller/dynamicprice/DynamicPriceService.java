@@ -158,6 +158,16 @@ public class DynamicPriceService {
         map.put("expiresAt", l.getExpiresAt());
         map.put("createdAt", l.getCreatedAt());
         map.put("usedAt", l.getUsedAt());
+        
+        // Generate customer-facing URL for sharing
+        if (l.getSeller() != null && l.getSeller().getPublicToken() != null) {
+            String customerUrl = String.format("/%s/dynamic/%s", 
+                l.getSeller().getPublicToken(), 
+                l.getPublicToken());
+            map.put("customerUrl", customerUrl);
+            map.put("shareableLink", customerUrl); // Alias for clarity
+        }
+        
         Map<String, Object> productMap = productSummary(l.getProduct());
         if (productMap != null) map.put("product", productMap);
         return map;
@@ -182,6 +192,7 @@ public class DynamicPriceService {
         productMap.put("id", p.getId());
         productMap.put("name", p.getName());
         productMap.put("description", p.getDescription());
+        productMap.put("publicToken", p.getPublicToken()); // Add public token
         int imageCount = p.getImagePaths() != null ? p.getImagePaths().size() : 0;
         int mainIndex = p.getMainImageIndex() != null ? p.getMainImageIndex() : 0;
         productMap.put("imageCount", imageCount);

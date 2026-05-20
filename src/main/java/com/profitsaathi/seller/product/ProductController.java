@@ -45,9 +45,10 @@ public class ProductController {
             @AuthenticationPrincipal AuthenticatedPrincipal me, // Added for consistency
             @RequestParam("request") String encryptedJson,
             @RequestParam(required = false, name = "media") List<MultipartFile> media,
+            @RequestParam(required = false, name = "keepIndices") String keepIndicesJson,
             @RequestParam(defaultValue = "0") int mainImageIndex) {
         try {
-            productService.updateProduct(encryptedJson, media, mainImageIndex);
+            productService.updateProduct(encryptedJson, media, keepIndicesJson, mainImageIndex);
             return ResponseEntity.ok(Collections.singletonMap("message", "Updated Successfully"));
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Collections.singletonMap("message", e.getMessage()));
@@ -97,7 +98,14 @@ public class ProductController {
             Map.Entry<String, InputStreamResource> r = productService.getProductImage(id, index);
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(r.getKey()))
-                    .cacheControl(org.springframework.http.CacheControl.maxAge(30, TimeUnit.DAYS))
+                    // Cache for 1 year but allow revalidation for Next.js Image optimization
+                    // Next.js Image component needs to be able to check if image changed
+                    .cacheControl(org.springframework.http.CacheControl
+                            .maxAge(365, TimeUnit.DAYS)
+                            .cachePublic()
+                            .mustRevalidate()) // Changed from immutable to mustRevalidate
+                    // Add ETag for efficient revalidation
+                    .eTag(String.valueOf(id) + "-" + index)
                     .body(r.getValue());
         } catch (Exception e) {
             return ResponseEntity.notFound().build();

@@ -1,0 +1,123 @@
+# =========================================================
+# RESILIENCE4J CONFIGURATION
+# =========================================================
+# Circuit breakers, retry, and timeout configuration for
+# external service calls (AI, email, WhatsApp, etc.)
+# =========================================================
+
+resilience4j:
+  # Circuit Breaker Configuration
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 30s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+        recordExceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.client.ResourceAccessException
+        ignoreExceptions:
+          - java.lang.IllegalArgumentException
+          - java.lang.IllegalStateException
+    
+    instances:
+      # AI Service Circuit Breaker
+      aiService:
+        baseConfig: default
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 50
+        waitDurationInOpenState: 60s
+        permittedNumberOfCallsInHalfOpenState: 3
+      
+      # Email Service Circuit Breaker
+      emailService:
+        baseConfig: default
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 60
+        waitDurationInOpenState: 30s
+      
+      # WhatsApp Service Circuit Breaker
+      whatsappService:
+        baseConfig: default
+        slidingWindowSize: 20
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 60
+        waitDurationInOpenState: 30s
+
+  # Retry Configuration
+  retry:
+    configs:
+      default:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+        ignoreExceptions:
+          - java.lang.IllegalArgumentException
+    
+    instances:
+      aiService:
+        baseConfig: default
+        maxAttempts: 3
+        waitDuration: 2s
+      
+      emailService:
+        baseConfig: default
+        maxAttempts: 2
+        waitDuration: 1s
+      
+      whatsappService:
+        baseConfig: default
+        maxAttempts: 2
+        waitDuration: 1s
+
+  # Time Limiter Configuration
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 10s
+        cancelRunningFuture: true
+    
+    instances:
+      aiService:
+        timeoutDuration: 30s
+        cancelRunningFuture: true
+      
+      emailService:
+        timeoutDuration: 10s
+        cancelRunningFuture: true
+      
+      whatsappService:
+        timeoutDuration: 10s
+        cancelRunningFuture: true
+
+  # Bulkhead Configuration (optional - limits concurrent calls)
+  bulkhead:
+    configs:
+      default:
+        maxConcurrentCalls: 25
+        maxWaitDuration: 0
+    
+    instances:
+      aiService:
+        maxConcurrentCalls: 10
+        maxWaitDuration: 100ms
+      
+      emailService:
+        maxConcurrentCalls: 20
+        maxWaitDuration: 0
+      
+      whatsappService:
+        maxConcurrentCalls: 20
+        maxWaitDuration: 0
