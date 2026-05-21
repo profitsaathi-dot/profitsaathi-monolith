@@ -53,12 +53,13 @@ public class OpenWAClient {
 
         if (name != null && !name.isEmpty()) {
             // Put webhook properties DIRECTLY into the body map
-            System.out.println("name" +name);
+
             body.put("name", name);
             body.put("role", "operator");
             body.put("expiresAt", "2027-12-31T23:59:59Z");
             body.put("allowedSessions", List.of(name));
         }
+
 
         try {
             ResponseEntity<Map> resp = restTemplate.exchange(
@@ -80,6 +81,46 @@ public class OpenWAClient {
 
         } catch (HttpStatusCodeException e) {
             log.error("openWA createToken failed: status={}, body={}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            throw new RuntimeException("openWA " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> UpdateToken(String tokenID,String name,String sessionId) {
+        Map<String, Object> body = new HashMap<>();
+
+
+        if (tokenID != null && !tokenID.isEmpty() &&   name != null && !name.isEmpty())  {
+            // Put webhook properties DIRECTLY into the body map
+
+            body.put("name", name);
+            body.put("role", "operator");
+            body.put("expiresAt", "2027-12-31T23:59:59Z");
+            body.put("allowedSessions", List.of(sessionId));
+        }
+
+
+        try {
+            ResponseEntity<Map> resp = restTemplate.exchange(
+                    baseUrl + "/api/auth/api-keys/"+tokenID,
+                    HttpMethod.PUT,
+                    new HttpEntity<>(body, headers()),
+                    Map.class);
+            return resp.getBody();
+        } catch (HttpClientErrorException.Conflict already) {
+            log.info("openWA: Token '{}' already exists, fetching state", tokenID);
+            Optional<WhatsAppSession> wb = whatsAppSessionRepository.findByWhatAppToken(tokenID);
+
+            if (wb.isPresent() && wb.get().getWhatAppToken() != null) {
+                return getToken(wb.get().getWhatAppTokenID());
+            } else {
+                log.warn("OpenWA reported Token '{}' exists, but it was not found in the local repository.", name);
+                throw new IllegalStateException("Inconsistent Token state for: " + name);
+            }
+
+        } catch (HttpStatusCodeException e) {
+            log.error("openWA updateToken failed: status={}, body={}",
                     e.getStatusCode(), e.getResponseBodyAsString());
             throw new RuntimeException("openWA " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
         }
@@ -132,7 +173,6 @@ public class OpenWAClient {
             } catch (HttpClientErrorException.Conflict already) {
                 log.info("openWA: session '{}' already exists, fetching state", name);
                 Optional<WhatsAppSession> wb = whatsAppSessionRepository.findBySessionNameAndStatusNotIn(name,List.of("DISCONNECTED","STOPPED"));
-                System.out.println("getSessionId" + wb.get().getSessionId() );
                 if (wb.isPresent() && wb.get().getSessionId() != null) {
                     return getSession(wb.get().getSessionId(),Token);
                 } else {

@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Seller-facing WAHA session lifecycle (connect / status / disconnect /
@@ -54,73 +55,188 @@ public class OpenWAWhatsAppSessionService {
 
     @Transactional
     public Map<String, Object> connect(Long sellerId) {
+
         WhatsAppSession session = ensureLocalSession(sellerId);
 
-        Map<String, Object> wahaSession = openWAClient.createSession(session.getSessionName(), webhookUrl,session.getWhatAppToken());
-        String wahaStatus = wahaSession != null ? asString(wahaSession.get("status")) : null;
-        if ("STOPPED".equalsIgnoreCase(wahaStatus) || "initializing".equalsIgnoreCase(wahaStatus) || "FAILED".equalsIgnoreCase(wahaStatus)) {
-            openWAClient.startSession(session.getSessionId(),session.getWhatAppToken());
-            wahaSession = openWAClient.getSession(session.getSessionId(),session.getWhatAppToken());
-        }
-        if (wahaSession != null) applyWahaState(session, wahaSession);
+        String status = asString(session.getStatus());
 
-        return composeStatusPayload(session);
+        try {
+
+            /*
+             * Create session first time
+             */
+            if (session.getSessionId() == null || session.getSessionId().isBlank()) {
+
+                Map<String, Object> created = openWAClient.createSession(
+                        session.getSessionName(),
+                        webhookUrl,
+                        session.getWhatAppToken()
+                );
+
+                if (created != null) {
+                    applyWahaState(session, created);
+                }
+            }
+
+            /*
+             * Start session when stopped/disconnected
+             */
+            else if (shouldStart(status)) {
+
+                openWAClient.startSession(
+                        session.getSessionId(),
+                        session.getWhatAppToken()
+                );
+            }
+
+            /*
+             * Always refresh latest status
+             */
+            Map<String, Object> latest = openWAClient.getSession(
+                    session.getSessionId(),
+                    session.getWhatAppToken()
+            );
+
+            if (latest != null) {
+                applyWahaState(session, latest);
+            }
+
+            return composeStatusPayload(session);
+
+        } catch (Exception e) {
+
+            log.error("WhatsApp connect failed for seller {}", sellerId, e);
+
+            session.setStatus("FAILED");
+            session.setConnected(false);
+
+            sessionRepository.save(session);
+
+            throw new RuntimeException("Unable to connect WhatsApp session");
+        }
     }
 
     @Transactional
     public void createToken(Long sellerId) {
         WhatsAppSession session = ensureLocalSession(sellerId);
-        Map<String, Object> wahaToken = openWAClient.createToken(session.getSessionId());
+        Map<String, Object> wahaToken = openWAClient.createToken(session.getSessionName());
+        if (wahaToken != null) applyWahaToken(session, wahaToken);
+        String apiKey = wahaToken != null ? asString(wahaToken.get("apiKey")) : null;
+        if(apiKey != null) {
+            Map<String, Object> wahaSession = openWAClient.createSession(session.getSessionName(), webhookUrl,session.getWhatAppToken());
+            if (wahaSession != null) applyWahaState(session, wahaSession);
+        }
+    }
+
+    //
+    @Transactional
+    public void updateToken(Long sellerId) {
+        WhatsAppSession session = ensureLocalSession(sellerId);
+        Map<String, Object> wahaToken = openWAClient.UpdateToken(session.getWhatAppTokenID(),session.getSessionName(),session.getSessionId());
         if (wahaToken != null) applyWahaToken(session, wahaToken);
 
     }
 
     @Transactional
     public Map<String, Object> status(Long sellerId) {
-        WhatsAppSession session = sessionRepository.findBySeller_Id(sellerId).orElse(null);
-        assert session != null;
-        if (session.getSessionId() == null || session.getSessionId().isBlank()) {
-            Map<String, Object> empty = new LinkedHashMap<>();
-            empty.put("status", "DISCONNECTED");
-            empty.put("connected", false);
-            return empty;
+
+        WhatsAppSession session = sessionRepository
+                .findBySeller_Id(sellerId)
+                .orElse(null);
+
+        if (session == null) {
+
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("status", "DISCONNECTED");
+            out.put("connected", false);
+
+            return out;
         }
 
-        session = renameIfStale(session, sellerId);
-        Map<String, Object> wahaSession = openWAClient.getSession(session.getSessionId(),session.getWhatAppToken());
-        if (wahaSession != null) applyWahaState(session, wahaSession);
+        if (session.getSessionId() == null || session.getSessionId().isBlank()) {
+            return composeStatusPayload(session);
+        }
+
+        try {
+
+            Map<String, Object> latest = openWAClient.getSession(
+                    session.getSessionId(),
+                    session.getWhatAppToken()
+            );
+
+            if (latest != null) {
+                applyWahaState(session, latest);
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to fetch WA session status", e);
+        }
 
         return composeStatusPayload(session);
     }
 
     @Transactional
     public Map<String, Object> restart(Long sellerId) {
-        WhatsAppSession session = sessionRepository.findBySeller_Id(sellerId)
-                .orElseThrow(() -> new IllegalStateException("No WhatsApp session — click Connect first"));
 
-        openWAClient.restartSession(session.getSessionName(),session.getWhatAppToken());
+        WhatsAppSession session = sessionRepository.findBySeller_Id(sellerId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "No WhatsApp session found"
+                ));
+
+        openWAClient.restartSession(
+                session.getSessionId(),
+                session.getWhatAppToken()
+        );
 
         session.setStatus("STARTING");
         session.setConnected(false);
-        sessionRepository.save(session);
 
-        Map<String, Object> wahaSession = openWAClient.getSession(session.getSessionId(),session.getWhatAppToken());
-        if (wahaSession != null) applyWahaState(session, wahaSession);
+        sessionRepository.save(session);
 
         return composeStatusPayload(session);
     }
 
+    @Transactional
     public void disconnect(Long sellerId) {
-        WhatsAppSession session = sessionRepository.findBySeller_Id(sellerId).orElse(null);
-        if (session == null) return;
-        openWAClient.logoutSession(session.getSessionId(),session.getWhatAppToken());
-        openWAClient.stopSession(session.getSessionId(),session.getWhatAppToken());
-        openWAClient.deleteSession(session.getSessionId(),session.getWhatAppToken());
+
+        WhatsAppSession session = sessionRepository
+                .findBySeller_Id(sellerId)
+                .orElse(null);
+
+        if (session == null) {
+            return;
+        }
+
+        try {
+
+            if (session.getSessionId() != null) {
+
+                openWAClient.logoutSession(
+                        session.getSessionId(),
+                        session.getWhatAppToken()
+                );
+
+                openWAClient.stopSession(
+                        session.getSessionId(),
+                        session.getWhatAppToken()
+                );
+
+                openWAClient.deleteSession(
+                        session.getSessionId(),
+                        session.getWhatAppToken()
+                );
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to disconnect WA session", e);
+        }
 
         session.setStatus("DISCONNECTED");
         session.setConnected(false);
         session.setPhoneNumber(null);
         session.setPushName(null);
+        //session.setSessionId(null);
+
         sessionRepository.save(session);
     }
 
@@ -213,7 +329,7 @@ public class OpenWAWhatsAppSessionService {
 
     private String desiredSessionName(Seller seller) {
         if ("per-user".equalsIgnoreCase(sessionNameMode) && seller != null) {
-            return  seller.getStoreName().replace("_","-");
+            return  "session-"+seller.getId();
         }
         return "default";
     }
@@ -224,11 +340,7 @@ public class OpenWAWhatsAppSessionService {
             session.setStatus(status.toString());
             String s = status.toString().toUpperCase();
 
-            session.setConnected(
-                    s.equals("READY")
-                            || s.equals("WORKING")
-                            || s.equals("CONNECTED")
-            );
+            session.setConnected(isConnected(s));
 
         }
         Object id = wahaSession.get("id");
@@ -257,7 +369,7 @@ public class OpenWAWhatsAppSessionService {
             session.setWhatAppTokenID(id.toString());
         }
         Object expiresAt = wahaSession.get("expiresAt");
-        if (id != null) {
+        if (expiresAt != null) {
             session.setExpiresAt(expiresAt.toString());
         }
         Object apiKey = wahaSession.get("apiKey");
@@ -268,131 +380,53 @@ public class OpenWAWhatsAppSessionService {
     }
 
 
-    private Map<String, Object> composeStatusPayload(WhatsAppSession session) {
+    private Map<String, Object> composeStatusPayload(
+            WhatsAppSession session
+    ) {
 
         Map<String, Object> out = new LinkedHashMap<>();
+
+        String status = asString(session.getStatus());
+
+        out.put("name", session.getSessionName());
+        out.put("status", status);
+        out.put("connected", Boolean.TRUE.equals(session.getConnected()));
 
         try {
 
             /*
-             * Get latest runtime session
+             * QR READY
              */
+            if ("QR_READY".equalsIgnoreCase(status)) {
 
+                Map<String, Object> qr = openWAClient.getQrRaw(
+                        session.getSessionId(),
+                        session.getWhatAppToken()
+                );
 
-            Map<String, Object> latest =
-                    openWAClient.getSession(session.getSessionId(),session.getWhatAppToken());
+                if (qr != null && qr.get("value") != null) {
 
-            /*
-             * New / disconnected session
-             */
-            if (latest == null
-                    || shouldStart(latest)) {
+                    out.put("qrBase64", qr.get("value"));
 
-                openWAClient.startSession(session.getSessionId(),session.getWhatAppToken());
-
-                /*
-                 * Wait internally for OpenWA
-                 */
-                Thread.sleep(2000);
-
-                latest =
-                        openWAClient.getSession(session.getSessionId(),session.getWhatAppToken());
+                    out.put(
+                            "qrMimetype",
+                            qr.getOrDefault("mimetype", "image/png")
+                    );
+                }
             }
 
             /*
-             * Poll until QR ready or connected
+             * Connected details
              */
-            int retry = 0;
+            if (Boolean.TRUE.equals(session.getConnected())) {
 
-            while (retry < 10 && latest != null) {
-
-                String status = getStatus(latest);
-
-                applyWahaState(session, latest);
-
-                /*log.info(
-                        "Session {} status {}",
-                        session.getSessionName(),
-                        status
-                );*/
-
-                /*
-                 * QR READY
-                 */
-                if ("qr_ready".equalsIgnoreCase(status)) {
-
-                    Map<String, Object> qr =
-                            openWAClient.getQrRaw(
-                                    session.getSessionId(),
-                                    session.getWhatAppToken()
-                            );
-
-                    if (qr != null
-                            && qr.get("value") != null) {
-
-                        out.put("name", session.getSessionName());
-                        out.put("status", "qr_ready");
-                        out.put("connected", false);
-                        out.put("qrBase64", qr.get("value"));
-                        out.put(
-                                "qrMimetype",
-                                qr.getOrDefault(
-                                        "mimetype",
-                                        "image/png"
-                                )
-                        );
-
-                        return out;
-                    }
-                }
-
-                /*
-                 * Connected
-                 */
-                if (isConnected(status)) {
-
-                    out.put("name", session.getSessionName());
-                    out.put("status", status);
-                    out.put("connected", true);
-                    out.put("phone", session.getPhoneNumber());
-                    out.put("pushName", session.getPushName());
-
-                    return out;
-                }
-
-                /*
-                 * Still initializing
-                 */
-                if ("initializing".equalsIgnoreCase(status)) {
-
-                    Thread.sleep(2000);
-
-                    latest =
-                            openWAClient.getSession(
-                                    session.getSessionId(),
-                                    session.getWhatAppToken());
-
-                    retry++;
-
-                    continue;
-                }
-
-                break;
+                out.put("phone", session.getPhoneNumber());
+                out.put("pushName", session.getPushName());
             }
-
-            /*
-             * fallback
-             */
-            out.put("name", session.getSessionName());
-            out.put("status", "initializing");
-            out.put("connected", false);
 
         } catch (Exception e) {
 
-            log.error(
-                    "Compose status payload failed",
-                    e
-            );
+            log.error("Failed to compose WA payload", e);
 
             out.put("error", e.getMessage());
         }
@@ -400,21 +434,37 @@ public class OpenWAWhatsAppSessionService {
         return out;
     }
 
-    private boolean shouldStart(Map<String, Object> latest) {
+    private boolean shouldStart(String status) {
 
-        String status = getStatus(latest);
+        if (status == null) {
+            return true;
+        }
 
-        return "created".equalsIgnoreCase(status)
-                || "disconnected".equalsIgnoreCase(status)
-                || "failed".equalsIgnoreCase(status)
-                || "stopped".equalsIgnoreCase(status);
+        return switch (status.toUpperCase()) {
+
+            case "STOPPED",
+                 "FAILED",
+                 "DISCONNECTED",
+                 "CREATED" -> true;
+
+            default -> false;
+        };
     }
 
     private boolean isConnected(String status) {
 
-        return "connected".equalsIgnoreCase(status)
-                || "working".equalsIgnoreCase(status)
-                || "ready".equalsIgnoreCase(status);
+        if (status == null) {
+            return false;
+        }
+
+        return switch (status.toUpperCase()) {
+
+            case "CONNECTED",
+                 "WORKING",
+                 "READY" -> true;
+
+            default -> false;
+        };
     }
 
     private String getStatus(Map<String, Object> map) {

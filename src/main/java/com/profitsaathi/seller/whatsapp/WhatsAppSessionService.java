@@ -54,17 +54,61 @@ public class WhatsAppSessionService {
 
     @Transactional
     public Map<String, Object> connect(Long sellerId) {
+
         WhatsAppSession session = ensureLocalSession(sellerId);
 
-        Map<String, Object> wahaSession = waha.createSession(session.getSessionName(), webhookUrl);
-        String wahaStatus = wahaSession != null ? asString(wahaSession.get("status")) : null;
-        if ("STOPPED".equalsIgnoreCase(wahaStatus) || "FAILED".equalsIgnoreCase(wahaStatus)) {
-            waha.startSession(session.getSessionName());
-            wahaSession = waha.getSession(session.getSessionName());
+        Map<String, Object> wahaSession =
+                waha.getSession(session.getSessionName());
+
+        /*
+         * Create only if missing
+         */
+        if (wahaSession == null) {
+
+            wahaSession = waha.createSession(
+                    session.getSessionName(),
+                    webhookUrl
+            );
         }
-        if (wahaSession != null) applyWahaState(session, wahaSession);
+
+        String status =
+                wahaSession != null
+                        ? asString(wahaSession.get("status"))
+                        : null;
+
+        /*
+         * Restart dead sessions
+         */
+        if (shouldStart(status)) {
+
+            waha.startSession(session.getSessionName());
+
+            wahaSession =
+                    waha.getSession(session.getSessionName());
+        }
+
+        if (wahaSession != null) {
+            applyWahaState(session, wahaSession);
+        }
 
         return composeStatusPayload(session);
+    }
+
+    private boolean shouldStart(String status) {
+
+        if (status == null) {
+            return true;
+        }
+
+        return switch (status.toUpperCase()) {
+
+            case "STOPPED",
+                 "FAILED",
+                 "DISCONNECTED",
+                 "CREATED" -> true;
+
+            default -> false;
+        };
     }
 
     @Transactional
@@ -77,7 +121,7 @@ public class WhatsAppSessionService {
             return empty;
         }
 
-        session = renameIfStale(session, sellerId);
+        session = renameIfStale(session);
         Map<String, Object> wahaSession = waha.getSession(session.getSessionName());
         if (wahaSession != null) applyWahaState(session, wahaSession);
 
@@ -109,7 +153,7 @@ public class WhatsAppSessionService {
         waha.stopSession(session.getSessionName());
         waha.deleteSession(session.getSessionName());
 
-        session.setStatus("STOPPED");
+        session.setStatus("DISCONNECTED");
         session.setConnected(false);
         session.setPhoneNumber(null);
         session.setPushName(null);
@@ -155,7 +199,7 @@ public class WhatsAppSessionService {
                 Object status = map.get("status");
                 if (status != null) {
                     session.setStatus(status.toString());
-                    session.setConnected("WORKING".equalsIgnoreCase(status.toString()));
+                    session.setConnected(isConnected(status.toString()));
                     sessionRepository.save(session);
                 }
             }
@@ -180,7 +224,7 @@ public class WhatsAppSessionService {
                 .orElseThrow(() -> new RuntimeException("Seller not registered"));
 
         return sessionRepository.findBySeller_Id(sellerId)
-                .map(existing -> renameIfStale(existing, sellerId))
+                .map(existing -> renameIfStale(existing))
                 .orElseGet(() -> {
                     WhatsAppSession s = new WhatsAppSession();
                     s.setSeller(seller);
@@ -191,7 +235,7 @@ public class WhatsAppSessionService {
                 });
     }
 
-    private WhatsAppSession renameIfStale(WhatsAppSession existing, Long sellerId) {
+    private WhatsAppSession renameIfStale(WhatsAppSession existing) {
         Seller seller = existing.getSeller();
         String desiredName = desiredSessionName(seller);
         if (desiredName.equals(existing.getSessionName())) return existing;
@@ -203,6 +247,22 @@ public class WhatsAppSessionService {
         return sessionRepository.save(existing);
     }
 
+    private boolean isConnected(String status) {
+
+        if (status == null) {
+            return false;
+        }
+
+        return switch (status.toUpperCase()) {
+
+            case "WORKING",
+                 "CONNECTED",
+                 "READY" -> true;
+
+            default -> false;
+        };
+    }
+
     private String desiredSessionName(Seller seller) {
         if ("per-user".equalsIgnoreCase(sessionNameMode) && seller != null) {
             return "seller_" + seller.getId();
@@ -210,22 +270,40 @@ public class WhatsAppSessionService {
         return "default";
     }
 
-    private void applyWahaState(WhatsAppSession session, Map<String, Object> wahaSession) {
-        Object status = wahaSession.get("status");
-        if (status != null) {
-            session.setStatus(status.toString());
-            session.setConnected("WORKING".equalsIgnoreCase(status.toString()));
+    private void applyWahaState(
+            WhatsAppSession session,
+            Map<String, Object> wahaSession
+    ) {
+
+        Object statusObj = wahaSession.get("status");
+
+        if (statusObj != null) {
+
+            String status = statusObj.toString();
+
+            session.setStatus(status);
+            session.setConnected(isConnected(status));
         }
+
         Object me = wahaSession.get("me");
+
         if (me instanceof Map<?, ?> meMap) {
+
             String id = asString(meMap.get("id"));
-            if (id != null && id.contains("@")) id = id.substring(0, id.indexOf('@'));
+
+            if (id != null && id.contains("@")) {
+                id = id.substring(0, id.indexOf('@'));
+            }
+
             session.setPhoneNumber(id);
-            session.setPushName(asString(meMap.get("pushName")));
+
+            session.setPushName(
+                    asString(meMap.get("pushName"))
+            );
         }
+
         sessionRepository.save(session);
     }
-
     private Map<String, Object> composeStatusPayload(WhatsAppSession session) {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("sessionName", session.getSessionName());

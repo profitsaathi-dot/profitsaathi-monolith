@@ -37,6 +37,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final WelcomeMailService welcomeMailService;
     private final com.profitsaathi.otp.OtpService otpService;
+    private final OpenWAWhatsAppSessionService openWAWhatsAppSessionService;
 
 
     /** Shared secret required to register an ADMIN. Empty value disables the endpoint. */
@@ -68,7 +69,12 @@ public class AuthService {
                 .build();
         c = credentialsRepo.save(c);
 
-
+        //Creating Open WA Token
+        try {
+            openWAWhatsAppSessionService.createToken(seller.getId());
+        } catch (Exception e) {
+            log.warn("Unable to createToken WA token for seller {}", seller.getId(), e);
+        }
         welcomeMailService.sendWelcomeSeller(seller);
         return buildTokenResponse(c);
     }

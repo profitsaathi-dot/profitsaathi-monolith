@@ -8,6 +8,7 @@ import com.profitsaathi.seller.whatsapp.OpenWA.OpenWAClient;
 import com.profitsaathi.seller.whatsapp.OpenWA.OpenWAWhatsAppSessionService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,11 +34,13 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class SellerService {
 
     private final SellerRepository sellerRepository;
     private final ProductConfig productConfig;
     private final OpenWAWhatsAppSessionService openWAWhatsAppSessionService;
+
 
     @Transactional
     public Seller onboard(Long sellerId, OnboardRequest req) {
@@ -57,9 +60,13 @@ public class SellerService {
         if (!slug.isEmpty() && !slug.equals(seller.getPublicToken())) {
             seller.setPublicToken(ensureUniquePublicToken(slug, seller.getId()));
         }
-        Seller newSeller = sellerRepository.save(seller);
-        //Creating Open WA Token
-        openWAWhatsAppSessionService.createToken(newSeller.getId());
+        Seller newSeller = sellerRepository.saveAndFlush(seller);
+        try {
+            openWAWhatsAppSessionService.updateToken(seller.getId());
+        } catch (Exception e) {
+            log.warn("Unable to update WA token for seller {}", seller.getId(), e);
+        }
+
         return newSeller;
     }
 
