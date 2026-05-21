@@ -1,6 +1,6 @@
 package com.profitsaathi.seller.whatsapp.OpenWA;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+
 import com.profitsaathi.seller.whatsapp.Entity.WhatsAppSession;
 import com.profitsaathi.seller.whatsapp.Repo.WhatsAppSessionRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +18,7 @@ import java.util.*;
 public class OpenWAClient {
         private final RestTemplate restTemplate = new RestTemplate();
         private final WhatsAppSessionRepository whatsAppSessionRepository;
+
 
         @Value("${profitsaathi.whatsapp.openWA.url}")
         private String baseUrl;
@@ -37,13 +38,83 @@ public class OpenWAClient {
             return h;
         }
 
-        @SuppressWarnings("unchecked")
-        public Map<String, Object> createSession(String name, String webhookUrl) {
+        private HttpHeaders headers(String token) {
+            HttpHeaders h = new HttpHeaders();
+            h.setContentType(MediaType.APPLICATION_JSON);
+            h.setAccept(List.of(MediaType.APPLICATION_JSON));
+            if (token != null && !token.isEmpty()) h.set("X-Api-Key", token);
+            return h;
+        }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> createToken(String name) {
+        Map<String, Object> body = new HashMap<>();
+
+
+        if (name != null && !name.isEmpty()) {
+            // Put webhook properties DIRECTLY into the body map
+            System.out.println("name" +name);
+            body.put("name", name);
+            body.put("role", "operator");
+            body.put("expiresAt", "2027-12-31T23:59:59Z");
+            body.put("allowedSessions", List.of(name));
+        }
+
+        try {
+            ResponseEntity<Map> resp = restTemplate.exchange(
+                    baseUrl + "/api/auth/api-keys",
+                    HttpMethod.POST,
+                    new HttpEntity<>(body, headers()),
+                    Map.class);
+            return resp.getBody();
+        } catch (HttpClientErrorException.Conflict already) {
+            log.info("openWA: Token '{}' already exists, fetching state", name);
+            Optional<WhatsAppSession> wb = whatsAppSessionRepository.findByWhatAppToken(name);
+
+            if (wb.isPresent() && wb.get().getWhatAppToken() != null) {
+                return getToken(wb.get().getWhatAppTokenID());
+            } else {
+                log.warn("OpenWA reported Token '{}' exists, but it was not found in the local repository.", name);
+                throw new IllegalStateException("Inconsistent Token state for: " + name);
+            }
+
+        } catch (HttpStatusCodeException e) {
+            log.error("openWA createToken failed: status={}, body={}",
+                    e.getStatusCode(), e.getResponseBodyAsString());
+            throw new RuntimeException("openWA " + e.getStatusCode() + ": " + e.getResponseBodyAsString(), e);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getToken(String tokenId) {
+        try {
+
+            ResponseEntity<Map> resp = restTemplate.exchange(
+                    baseUrl + "/api/auth/api-keys/" + tokenId,
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers()),
+                    Map.class);
+            return resp.getBody();
+        } catch (HttpStatusCodeException e) {
+            if (e.getStatusCode() == HttpStatus.NOT_FOUND
+                    || e.getStatusCode() == HttpStatus.UNPROCESSABLE_ENTITY) {
+                log.debug("openWA getToken({}) returned {} — no live session", tokenId, e.getStatusCode());
+                return null;
+            }
+            throw e;
+        }
+
+
+    }
+
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> createSession(String name, String webhookUrl,String Token) {
             Map<String, Object> body = new HashMap<>();
 
 
             if (webhookUrl != null && !webhookUrl.isEmpty()) {
                 // Put webhook properties DIRECTLY into the body map
+
                 body.put("name", name);
                 Map<String, Object> config = new HashMap<>();
                 config.put("autoReconnect", true);
@@ -55,15 +126,15 @@ public class OpenWAClient {
                 ResponseEntity<Map> resp = restTemplate.exchange(
                         baseUrl + "/api/sessions",
                         HttpMethod.POST,
-                        new HttpEntity<>(body, headers()),
+                        new HttpEntity<>(body, headers(Token)),
                         Map.class);
                 return resp.getBody();
             } catch (HttpClientErrorException.Conflict already) {
                 log.info("openWA: session '{}' already exists, fetching state", name);
-                Optional<WhatsAppSession> wb = whatsAppSessionRepository.findBySessionName(name);
-
+                Optional<WhatsAppSession> wb = whatsAppSessionRepository.findBySessionNameAndStatusNotIn(name,List.of("DISCONNECTED","STOPPED"));
+                System.out.println("getSessionId" + wb.get().getSessionId() );
                 if (wb.isPresent() && wb.get().getSessionId() != null) {
-                    return getSession(wb.get().getSessionId());
+                    return getSession(wb.get().getSessionId(),Token);
                 } else {
                     log.warn("OpenWA reported session '{}' exists, but it was not found in the local repository.", name);
                     throw new IllegalStateException("Inconsistent session state for: " + name);
@@ -76,7 +147,9 @@ public class OpenWAClient {
             }
         }
 
-        public List<Map<String, Object>> listSessions() {
+
+
+    public List<Map<String, Object>> listSessions() {
         try {
             ResponseEntity<List> resp = restTemplate.exchange(
                     baseUrl + "/api/sessions",
@@ -92,14 +165,17 @@ public class OpenWAClient {
         }
     }
 
+
+
         @SuppressWarnings("unchecked")
-        public Map<String, Object> getSession(String sessionId) {
+        public Map<String, Object> getSession(String sessionId,String Token) {
             try {
                 ///api/sessions/{sessionId}/webhooks
+
                 ResponseEntity<Map> resp = restTemplate.exchange(
                         baseUrl + "/api/sessions/" + sessionId,
                         HttpMethod.GET,
-                        new HttpEntity<>(headers()),
+                        new HttpEntity<>(headers(Token)),
                         Map.class);
                 return resp.getBody();
             } catch (HttpStatusCodeException e) {
@@ -115,13 +191,13 @@ public class OpenWAClient {
         }
 
     @SuppressWarnings("unchecked")
-    public Map<String, Object> getQrRaw(String sessionId) {
+    public Map<String, Object> getQrRaw(String sessionId,String Token) {
 
         HttpHeaders h = new HttpHeaders();
         h.setAccept(List.of(MediaType.APPLICATION_JSON));
 
-        if (apiKey != null && !apiKey.isEmpty()) {
-            h.set("X-Api-Key", apiKey);
+        if (Token != null && !Token.isEmpty()) {
+            h.set("X-Api-Key", Token);
         }
 
         try {
@@ -186,16 +262,16 @@ public class OpenWAClient {
         }
     }
         ///api/sessions/{sessionId}/messages/send-text
-        public void sendText(String session, String chatId, String text) {
+        public void sendText(String sessionId, String chatId, String text,String Token) {
         Map<String, Object> body = new HashMap<>();
         body.put("chatId", chatId);
         body.put("text", text);
         //body.put("linkPreview", true);
         try {
             restTemplate.exchange(
-                    baseUrl + "/api/sessions/"+session+"messages/send-text",
+                    baseUrl + "/api/sessions/"+sessionId+"/messages/send-text",
                     HttpMethod.POST,
-                    new HttpEntity<>(body, headers()),
+                    new HttpEntity<>(body, headers(Token)),
                     Map.class);
         } catch (HttpStatusCodeException e) {
             log.error("WAHA sendText failed: status={}, body={}",
@@ -206,12 +282,12 @@ public class OpenWAClient {
 
 
         @SuppressWarnings("unchecked")
-        public Map<String, Object> startSession(String sessionId) {
+        public Map<String, Object> startSession(String sessionId,String Token) {
             try {
                 ResponseEntity<Map> resp = restTemplate.exchange(
                         baseUrl + "/api/sessions/" + sessionId + "/start",
                         HttpMethod.POST,
-                        new HttpEntity<>(headers()),
+                        new HttpEntity<>(headers(Token)),
                         Map.class
                 );
 
@@ -229,11 +305,12 @@ public class OpenWAClient {
             }
         }
 
-        public void stopSession(String SessionId) {
-        callSafe(HttpMethod.POST, "/api/sessions/" + SessionId + "/stop");
+        // /api/sessions/{id}/stop
+        public void stopSession(String SessionId,String Token) {
+        callSafe(HttpMethod.POST, "/api/sessions/" + SessionId + "/stop",Token);
         }
 
-        public void restartSession(String name) {
+        public void restartSession(String name,String Token) {
         try {
             restTemplate.exchange(
                     baseUrl + "/api/sessions/" + name + "/restart",
@@ -247,21 +324,22 @@ public class OpenWAClient {
         }
     }
 
-        public void logoutSession(String name) {
-        callSafe(HttpMethod.POST, "/api/sessions/" + name + "/logout");
+
+        public void logoutSession(String sessionId,String Token) {
+        callSafe(HttpMethod.POST, "/api/sessions/" + sessionId + "/logout",Token);
     }
 
-        public void deleteSession(String sessionId) {
-        callSafe(HttpMethod.DELETE, "/api/sessions/" + sessionId);
+        public void deleteSession(String sessionId,String Token) {
+        callSafe(HttpMethod.DELETE, "/api/sessions/" + sessionId,Token);
     }
 
 
-    private void callSafe(HttpMethod method, String path) {
+    private void callSafe(HttpMethod method, String path,String Token) {
         try {
             restTemplate.exchange(
                     baseUrl + path,
                     method,
-                    new HttpEntity<>(headers()),
+                    new HttpEntity<>(headers(Token)),
                     Void.class);
         } catch (HttpStatusCodeException e) {
             // intentionally swallow — disconnect should always succeed

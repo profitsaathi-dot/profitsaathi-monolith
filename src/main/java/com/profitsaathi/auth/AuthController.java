@@ -1,6 +1,9 @@
 package com.profitsaathi.auth;
 
 import com.profitsaathi.auth.AuthDtos.*;
+import com.profitsaathi.util.aes.AESRequest;
+import com.profitsaathi.util.aes.AESService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -14,6 +17,8 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final AuthService authService;
+    private final AESService aesService;
+    private final ObjectMapper objectMapper;
 
     @PostMapping("/signup/seller")
     public ResponseEntity<TokenResponse> signupSeller(@Valid @RequestBody SellerSignupRequest req) {
@@ -31,8 +36,14 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public TokenResponse login(@Valid @RequestBody LoginRequest req) {
-        return authService.login(req);
+    public TokenResponse login(@Valid @RequestBody AESRequest request) {
+        try {
+            String json = aesService.decryptToJson(request);
+            LoginRequest req = objectMapper.readValue(json, LoginRequest.class);
+            return authService.login(req);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to process login request: " + e.getMessage());
+        }
     }
 
 
@@ -81,12 +92,24 @@ public class AuthController {
     }
 
     @PostMapping("/forgot-password")
-    public ResponseEntity<AuthDtos.ApiResponse> forgotPassword(@Valid @RequestBody AuthDtos.ForgotPasswordRequest req) {
-        return ResponseEntity.ok(authService.forgotPassword(req));
+    public ResponseEntity<AuthDtos.ApiResponse> forgotPassword(@Valid @RequestBody AESRequest request) {
+        try {
+            String json = aesService.decryptToJson(request);
+            AuthDtos.ForgotPasswordRequest req = objectMapper.readValue(json, AuthDtos.ForgotPasswordRequest.class);
+            return ResponseEntity.ok(authService.forgotPassword(req));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to process forgot password request: " + e.getMessage());
+        }
     }
 
     @PostMapping("/reset-password")
-    public ResponseEntity<AuthDtos.ApiResponse> resetPassword(@Valid @RequestBody AuthDtos.ResetPasswordRequest req) {
-        return ResponseEntity.ok(authService.resetPassword(req));
+    public ResponseEntity<AuthDtos.ApiResponse> resetPassword(@Valid @RequestBody AESRequest request) {
+        try {
+            String json = aesService.decryptToJson(request);
+            AuthDtos.ResetPasswordRequest req = objectMapper.readValue(json, AuthDtos.ResetPasswordRequest.class);
+            return ResponseEntity.ok(authService.resetPassword(req));
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to process reset password request: " + e.getMessage());
+        }
     }
 }

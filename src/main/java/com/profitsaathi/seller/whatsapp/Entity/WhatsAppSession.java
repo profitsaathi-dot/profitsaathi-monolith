@@ -2,6 +2,7 @@ package com.profitsaathi.seller.whatsapp.Entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.profitsaathi.seller.user.Seller;
+import com.profitsaathi.util.aes.EncryptedStringConverter;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -32,9 +33,32 @@ public class WhatsAppSession {
     @JsonIgnore
     private Seller seller;
 
+    @JsonIgnore
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "open_wa_token", length = 512)
+    private String whatAppToken;
+
+    @JsonIgnore
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "open_wa_token_id", length = 128)
+    private String whatAppTokenID;
+
+    @JsonIgnore
+    @Convert(converter = EncryptedStringConverter.class)
+    @Column(name = "role", length = 32)
+    private String role;
+
+    @JsonIgnore
+    @Column(name = "expiresAt", length = 128)
+    private String expiresAt;
+
+    @JsonIgnore
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "session_id", unique = true, length = 128)
     private String sessionId;
 
+    @JsonIgnore
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(name = "session_name", nullable = false, unique = true, length = 128)
     private String sessionName;
 

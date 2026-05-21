@@ -8,6 +8,7 @@ import com.profitsaathi.customer.user.CustomerRepository;
 import com.profitsaathi.notification.email.WelcomeMailService;
 import com.profitsaathi.seller.user.Seller;
 import com.profitsaathi.seller.user.SellerRepository;
+import com.profitsaathi.seller.whatsapp.OpenWA.OpenWAWhatsAppSessionService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import jakarta.transaction.Transactional;
@@ -36,6 +37,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final WelcomeMailService welcomeMailService;
     private final com.profitsaathi.otp.OtpService otpService;
+    private final OpenWAWhatsAppSessionService openWAWhatsAppSessionService;
 
     /** Shared secret required to register an ADMIN. Empty value disables the endpoint. */
     @Value("${security.admin.signup-secret:}")
@@ -66,6 +68,8 @@ public class AuthService {
                 .build();
         c = credentialsRepo.save(c);
 
+        //Creating Open WA Token
+        openWAWhatsAppSessionService.createToken(seller.getId());
         welcomeMailService.sendWelcomeSeller(seller);
         return buildTokenResponse(c);
     }

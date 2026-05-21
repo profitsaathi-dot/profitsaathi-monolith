@@ -2,7 +2,7 @@ package com.profitsaathi.util.aes;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -10,12 +10,12 @@ import org.springframework.stereotype.Service;
 public class AESService {
 
     private final ObjectMapper objectMapper;
+    private final String secretKey;
 
-    @Value("${aes.secret.key}")
-    private String secretKey;
-
-    public AESService(ObjectMapper objectMapper) {
+    public AESService(ObjectMapper objectMapper, 
+                      @Qualifier("decodedAesSecretKey") String secretKey) {
         this.objectMapper = objectMapper;
+        this.secretKey = secretKey;
     }
 
     public String encrypt(Object data) {

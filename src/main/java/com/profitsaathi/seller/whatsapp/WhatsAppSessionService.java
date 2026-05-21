@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -145,7 +146,7 @@ public class WhatsAppSessionService {
         Object sessionName = payload.get("session");
         if (sessionName == null) return;
 
-        WhatsAppSession session = sessionRepository.findBySessionName(sessionName.toString()).orElse(null);
+        WhatsAppSession session = sessionRepository.findBySessionNameAndStatusNotIn(sessionName.toString(), List.of("DISCONNECTED","STOPPED")).orElse(null);
         if (session == null) return;
 
         if ("session.status".equals(event)) {

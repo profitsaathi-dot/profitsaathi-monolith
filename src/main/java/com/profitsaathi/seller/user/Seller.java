@@ -93,6 +93,8 @@ public class Seller {
     @Column(name = "nvidia_api_key", length = 512)
     private String nvidiaApiKey;
 
+
+
     /**
      * Seller's preferred primary LLM. The chat service tries this first;
      * if it errors out, it falls back through the other two providers

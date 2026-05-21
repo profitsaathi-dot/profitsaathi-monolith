@@ -1,5 +1,6 @@
 package com.profitsaathi.seller.whatsapp.Entity;
 
+import com.profitsaathi.util.aes.EncryptedStringConverter;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
@@ -27,6 +28,7 @@ public class SellerWhatsAppMessage {
     @Column(name = "chat_id", length = 128)
     private String chatId;
 
+    @Convert(converter = EncryptedStringConverter.class)
     @Column(columnDefinition = "TEXT")
     private String message;
 
@@ -37,4 +39,5 @@ public class SellerWhatsAppMessage {
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
+
 }

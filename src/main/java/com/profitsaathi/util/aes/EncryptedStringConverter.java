@@ -2,7 +2,7 @@ package com.profitsaathi.util.aes;
 
 import jakarta.persistence.AttributeConverter;
 import jakarta.persistence.Converter;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 /**
@@ -19,8 +19,10 @@ public class EncryptedStringConverter implements AttributeConverter<String, Stri
 
     private static String secretKey;
 
-    @Value("${aes.secret.key}")
-    public void setSecretKey(String key) {
+    /**
+     * Inject the decoded AES secret key from DecryptorConfig
+     */
+    public EncryptedStringConverter(@Qualifier("decodedAesSecretKey") String key) {
         EncryptedStringConverter.secretKey = key;
     }
 

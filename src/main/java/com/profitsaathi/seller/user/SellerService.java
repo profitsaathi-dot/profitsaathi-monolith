@@ -4,6 +4,8 @@ import com.profitsaathi.config.ProductConfig;
 import com.profitsaathi.seller.store.OnboardRequest;
 import com.profitsaathi.seller.store.PaymentSettingsRequest;
 import com.profitsaathi.seller.store.PreferencesRequest;
+import com.profitsaathi.seller.whatsapp.OpenWA.OpenWAClient;
+import com.profitsaathi.seller.whatsapp.OpenWA.OpenWAWhatsAppSessionService;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
@@ -54,7 +56,9 @@ public class SellerService {
         if (!slug.isEmpty() && !slug.equals(seller.getPublicToken())) {
             seller.setPublicToken(ensureUniquePublicToken(slug, seller.getId()));
         }
-        return sellerRepository.save(seller);
+        Seller newSeller = sellerRepository.save(seller);
+
+        return newSeller;
     }
 
     @Transactional
