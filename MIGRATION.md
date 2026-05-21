@@ -6,7 +6,7 @@ modules that have **no Keycloak or Kafka coupling** can be ported with a
 small mechanical pass. This file lists every transformation you need to
 apply, and the few places you need to think.
 
-## 1. Mechanical search-and-replace
+## 1. Mechanical search-and-replace 
 
 Apply these rewrites to every Java file you copy from the old apps into
 `profitsaathi-monolith/src/main/java/com/profitsaathi/<new-package>/`:
