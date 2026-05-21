@@ -37,6 +37,7 @@ public class SellerService {
 
     private final SellerRepository sellerRepository;
     private final ProductConfig productConfig;
+    private final OpenWAWhatsAppSessionService openWAWhatsAppSessionService;
 
     @Transactional
     public Seller onboard(Long sellerId, OnboardRequest req) {
@@ -57,7 +58,8 @@ public class SellerService {
             seller.setPublicToken(ensureUniquePublicToken(slug, seller.getId()));
         }
         Seller newSeller = sellerRepository.save(seller);
-
+        //Creating Open WA Token
+        openWAWhatsAppSessionService.createToken(newSeller.getId());
         return newSeller;
     }
 
